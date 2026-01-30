@@ -110,26 +110,30 @@ class LocationHandler:
 
         # 4. Click Apply
         # Sometimes 'Apply' is an input type=submit or a span.
-        # Ensure we click the right element.
-        try:
-            await self.page.click(apply_button_selector)
-        except PlaywrightTimeoutError:
-             # Try alternate selector for Apply if ID fails (unlikely but possible)
-             await self.page.click("input[aria-labelledby='GLUXZipUpdate-announce']")
+        apply_selectors = [
+            apply_button_selector,  # #GLUXZipUpdate
+            "input[aria-labelledby='GLUXZipUpdate-announce']",
+            "#GLUXZipUpdate input",
+            "span.a-button-inner input[type='submit']"
+        ]
 
-        # 5. Handle "Continue" or "Done" or Page Refresh
-        # Wait for potential update
-        await asyncio.sleep(1)
+        apply_clicked = False
+        for selector in apply_selectors:
+            try:
+                if await self.page.is_visible(selector):
+                    logger.info(f"Clicking Apply button: {selector}")
+                    await self.page.click(selector, timeout=3000)
+                    apply_clicked = True
+                    break
+            except Exception:
+                continue
 
-        # Check for "Continue" button (common when switching from International)
-        # ID: GLUXRealAddressUpdatell or similar, or just text search
-        continue_btn = "#GLUXConfirmClose" # This is often "Done"
+        if not apply_clicked:
+            logger.warning("Could not find Apply button, trying Enter key")
+            await self.page.press(zip_input_selector, "Enter")
 
-        # Sometimes there's a secondary popover for "Update location?"
-        # We need to handle:
-        # 1. "Please enter a valid US zip code" (Error)
-        # 2. "Done" button
-        # 3. "Continue" button
+        # 5. Wait for Amazon to process the location change
+        await asyncio.sleep(2)
 
         # Check for error first
         error_msg_selector = "#GLUXZipError"
@@ -138,15 +142,13 @@ class LocationHandler:
              if error_text.strip():
                  raise LocationVerificationError(f"Invalid Zip Code detected by Amazon: {error_text}")
 
-        # Click Done/Continue
-        # We try multiple selectors for the "confirm/close" action
-        # The screenshot shows a "Continue" button. It often has ID `GLUXConfirmClose` or is inside a footer.
+        # 6. Click Done button to close modal (NOT generic close which cancels)
+        # Be specific - only click actual "Done" or "Continue" buttons
         confirm_selectors = [
-            "#GLUXConfirmClose", # Done/Continue
-            "button[name='glowDoneButton']", # Standard Done
-            ".a-popover-footer input[type='submit']", # Often the Continue button in the footer
-            "[data-action='a-popover-close']", # Generic close
-            "#GLUXHiddenUpdate" # Sometimes hidden update action
+            "#GLUXConfirmClose",  # Done/Continue button
+            "button[name='glowDoneButton']",  # Standard Done
+            ".a-popover-footer button.a-button-primary",  # Primary button in footer
+            "input[data-action='GLUXConfirmAction']",  # Confirm action
         ]
 
         clicked_confirm = False
