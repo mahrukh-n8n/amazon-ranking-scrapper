@@ -37,14 +37,25 @@ class ScraperController(QObject):
         self.all_results = []
         self.webhook_url = ""
         self.webhook_enabled = False
+        self.headless = False  # Run browser in headless mode
 
         self.scheduler = AsyncIOScheduler()
-        self.scheduler.start()
+        # Defer scheduler start until event loop is running
+        self._scheduler_started = False
 
     def set_tasks(self, tasks: list):
         """Sets the list of tasks to process."""
         self.tasks = tasks
         self.current_task_index = 0
+
+    def _ensure_scheduler_started(self):
+        """Start the scheduler if not already running (requires event loop)."""
+        if not self._scheduler_started:
+            try:
+                self.scheduler.start()
+                self._scheduler_started = True
+            except Exception as e:
+                logger.warning(f"Could not start scheduler: {e}")
 
     def schedule_job(self, recurrence: str, time_str: str):
         """
@@ -52,6 +63,7 @@ class ScraperController(QObject):
         recurrence: 'Daily' or 'Weekly'
         time_str: HH:MM
         """
+        self._ensure_scheduler_started()
         # Clear existing scheduled jobs for scraping
         self.scheduler.remove_all_jobs()
 
@@ -85,6 +97,7 @@ class ScraperController(QObject):
 
     def get_next_run(self):
         """Returns the timestamp of the next scheduled run or None."""
+        self._ensure_scheduler_started()
         job = self.scheduler.get_job('amazon_scraping_job')
         if job and job.next_run_time:
             return job.next_run_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -134,7 +147,7 @@ class ScraperController(QObject):
 
         try:
             # Initialize Browser
-            self.browser_manager = BrowserManager(user_data_dir="user_data", headless=False)
+            self.browser_manager = BrowserManager(user_data_dir="user_data", headless=self.headless)
             self.scraper = AmazonScraper(self.browser_manager)
 
             await self.scraper.initialize()
@@ -149,8 +162,10 @@ class ScraperController(QObject):
                 task_marketplace = task.get('marketplace', 'amazon.com')
                 # Split ASINs if multiple are provided (comma, space, tab, newline separated)
                 asins = [a.strip() for a in re.split(r'[,\s\t\n]+', task['asin']) if a.strip()]
+                # Split Keywords if multiple are provided (comma or newline separated, NOT space - keywords can have spaces)
+                keywords = [k.strip() for k in re.split(r'[,\n]+', task['keyword']) if k.strip()]
 
-                logger.info(f"Processing Task {i+1}/{len(self.tasks)}: {task['keyword']} (ASINs: {', '.join(asins)}) in {task['zip_code']} on {task_marketplace}")
+                logger.info(f"Processing Task {i+1}/{len(self.tasks)}: {len(keywords)} keyword(s), {len(asins)} ASIN(s) in {task['zip_code']} on {task_marketplace}")
 
                 # Navigate to marketplace if changed or first task
                 if self.current_marketplace != task_marketplace:
@@ -161,59 +176,76 @@ class ScraperController(QObject):
                     await self.pause_event.wait()
                     if self.check_stop(): break
 
-                # Retry loop for the task
-                task_complete = False
-                while not task_complete and not self.check_stop():
-                    try:
-                        # 1. Set Location
-                        # Optimization: We could check if location is already set, but set_location handles verification.
-                        await self.scraper.set_delivery_zip(task['zip_code'])
+                # Process each keyword separately
+                for keyword in keywords:
+                    if self.check_stop(): break
 
-                        await self.pause_event.wait()  # Blocks if paused
-                        if self.check_stop(): break
+                    logger.info(f"Searching keyword: '{keyword}' for ASINs: {', '.join(asins)}")
 
-                        # 2. Search
-                        await self.scraper.search_keyword(task['keyword'])
+                    # Retry loop for the keyword search
+                    keyword_complete = False
+                    while not keyword_complete and not self.check_stop():
+                        try:
+                            # 1. Set Location
+                            # Optimization: We could check if location is already set, but set_location handles verification.
+                            await self.scraper.set_delivery_zip(task['zip_code'])
 
-                        await self.pause_event.wait()  # Blocks if paused
-                        if self.check_stop(): break
+                            await self.pause_event.wait()  # Blocks if paused
+                            if self.check_stop(): break
 
-                        # 3. Find ASINs
-                        results = await self.scraper.find_asins_ranks(asins)
+                            # 2. Search
+                            await self.scraper.search_keyword(keyword)
 
-                        await self.pause_event.wait()  # Blocks if paused
+                            await self.pause_event.wait()  # Blocks if paused
+                            if self.check_stop(): break
 
-                        for res in results:
-                            # Add task metadata to results
-                            full_result = {
-                                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "Marketplace": task_marketplace,
-                                "Zip Code": task['zip_code'],
-                                "Keyword": task['keyword'],
-                                "ASIN": res['asin'],
-                                "Rank": res['rank'] if res['found'] else "N/A",
-                                "Found": res['found'],
-                                "Page": res['page']
-                            }
-                            self.all_results.append(full_result)
+                            # 3. Find ASINs
+                            results = await self.scraper.find_asins_ranks(asins)
 
-                            if res['found']:
-                                logger.info(f"Result for {res['asin']}: Found at Rank {res['rank']}")
-                            else:
-                                logger.info(f"Result for {res['asin']}: Not found")
+                            await self.pause_event.wait()  # Blocks if paused
 
-                        task_complete = True # Success
+                            for res in results:
+                                # Add task metadata to results
+                                full_result = {
+                                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    "Marketplace": task_marketplace,
+                                    "Zip Code": task['zip_code'],
+                                    "Keyword": keyword,
+                                    "ASIN": res['asin'],
+                                    "Sequential Rank": res['sequential_rank'] if res['found'] else "N/A",
+                                    "Organic Rank": res['organic_rank'] if res['found'] and res['organic_rank'] > 0 else "N/A",
+                                    "Sponsored Rank": res['sponsored_rank'] if res['found'] and res['sponsored_rank'] > 0 else "N/A",
+                                    "Is Sponsored": res.get('is_sponsored', False),
+                                    "Found": res['found'],
+                                    "Page": res['page']
+                                }
+                                self.all_results.append(full_result)
 
-                    except CaptchaDetectedError:
-                        await self.handle_captcha()
-                        # Loop continues to retry the task
-                    except LocationVerificationError as e:
-                        logger.error(f"Location error: {e}")
-                        # Move to next task or retry? For now, move to next task to avoid infinite loops if zip is bad.
-                        break
-                    except Exception as e:
-                        logger.error(f"Task failed with unexpected error: {e}", exc_info=True)
-                        break
+                                if res['found']:
+                                    rank_info = f"Sequential: {res['sequential_rank']}"
+                                    if res.get('is_sponsored'):
+                                        rank_info += f", Sponsored: {res['sponsored_rank']}"
+                                    else:
+                                        rank_info += f", Organic: {res['organic_rank']}"
+                                    logger.info(f"Result for {res['asin']}: {rank_info}")
+                                else:
+                                    logger.info(f"Result for {res['asin']}: Not found")
+
+                            keyword_complete = True # Success
+
+                        except CaptchaDetectedError:
+                            await self.handle_captcha()
+                            # Loop continues to retry the keyword
+                        except LocationVerificationError as e:
+                            logger.error(f"Location error: {e}")
+                            # Move to next keyword to avoid infinite loops if zip is bad
+                            break
+                        except Exception as e:
+                            logger.error(f"Keyword search failed with unexpected error: {e}", exc_info=True)
+                            break
+
+                    # Small delay between keywords
+                    await asyncio.sleep(1)
 
                 # Small delay between tasks
                 await asyncio.sleep(2)

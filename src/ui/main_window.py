@@ -18,7 +18,7 @@ from src.notification_manager import NotificationManager
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Amazon Geo-Rank Scraper")
+        self.setWindowTitle("Amazon Geo-Rank Scraper - by Consologist.com")
         self.resize(800, 700)
 
         self.controller = ScraperController()
@@ -34,8 +34,13 @@ class MainWindow(QMainWindow):
 
         # Title Label
         title = QLabel("Amazon Geo-Rank Scraper")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 20px;")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 5px;")
         layout.addWidget(title)
+
+        # Branding Label
+        branding = QLabel("Developed by Consologist.com - Amazon Services Agency")
+        branding.setStyleSheet("font-size: 11px; color: #666; margin-bottom: 15px;")
+        layout.addWidget(branding)
 
         # File Loading Section
         file_layout = QHBoxLayout()
@@ -72,6 +77,11 @@ class MainWindow(QMainWindow):
         self.cb_minimize_tray = QCheckBox("Minimize to Tray on Close")
         self.cb_minimize_tray.toggled.connect(self.save_settings)
         settings_layout.addRow("", self.cb_minimize_tray)
+
+        self.cb_headless = QCheckBox("Run Browser in Headless Mode (invisible)")
+        self.cb_headless.setToolTip("Run browser without visible window. Faster but you can't see what's happening or solve captchas.")
+        self.cb_headless.toggled.connect(self.save_settings)
+        settings_layout.addRow("", self.cb_headless)
 
         layout.addWidget(settings_group)
 
@@ -238,6 +248,7 @@ class MainWindow(QMainWindow):
                 self.cb_webhook_enabled.blockSignals(True)
                 self.cb_notify_enabled.blockSignals(True)
                 self.cb_minimize_tray.blockSignals(True)
+                self.cb_headless.blockSignals(True)
                 self.cb_schedule_enabled.blockSignals(True)
                 self.combo_recurrence.blockSignals(True)
                 self.time_edit.blockSignals(True)
@@ -246,6 +257,7 @@ class MainWindow(QMainWindow):
                 self.cb_webhook_enabled.setChecked(settings.get("webhook_enabled", False))
                 self.cb_notify_enabled.setChecked(settings.get("notify_enabled", True))
                 self.cb_minimize_tray.setChecked(settings.get("minimize_to_tray", False))
+                self.cb_headless.setChecked(settings.get("headless", False))
 
                 self.cb_schedule_enabled.setChecked(settings.get("schedule_enabled", False))
                 self.combo_recurrence.setCurrentText(settings.get("recurrence", "Daily"))
@@ -258,6 +270,7 @@ class MainWindow(QMainWindow):
                 self.cb_webhook_enabled.blockSignals(False)
                 self.cb_notify_enabled.blockSignals(False)
                 self.cb_minimize_tray.blockSignals(False)
+                self.cb_headless.blockSignals(False)
                 self.cb_schedule_enabled.blockSignals(False)
                 self.combo_recurrence.blockSignals(False)
                 self.time_edit.blockSignals(False)
@@ -268,6 +281,7 @@ class MainWindow(QMainWindow):
                 # without triggering a save.
                 self.controller.webhook_url = self.edit_webhook.text().strip()
                 self.controller.webhook_enabled = self.cb_webhook_enabled.isChecked()
+                self.controller.headless = self.cb_headless.isChecked()
 
                 if self.cb_schedule_enabled.isChecked():
                     # We can call update_scheduling but we need to ensure IT doesn't save
@@ -294,10 +308,13 @@ class MainWindow(QMainWindow):
             "webhook_enabled": self.cb_webhook_enabled.isChecked(),
             "notify_enabled": self.cb_notify_enabled.isChecked(),
             "minimize_to_tray": self.cb_minimize_tray.isChecked(),
+            "headless": self.cb_headless.isChecked(),
             "schedule_enabled": self.cb_schedule_enabled.isChecked(),
             "recurrence": self.combo_recurrence.currentText(),
             "schedule_time": self.time_edit.time().toString("HH:mm"),
         }
+        # Update controller with headless setting
+        self.controller.headless = self.cb_headless.isChecked()
         try:
             with open("settings.json", "w") as f:
                 json.dump(settings, f, indent=4)

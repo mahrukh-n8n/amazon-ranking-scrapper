@@ -133,7 +133,15 @@ class LocationHandler:
             await self.page.press(zip_input_selector, "Enter")
 
         # 5. Wait for Amazon to process the location change
-        await asyncio.sleep(2)
+        # Amazon may show loading state or refresh partially
+        await asyncio.sleep(1)
+
+        # Wait for network to settle (Amazon often makes AJAX calls here)
+        try:
+            await self.page.wait_for_load_state("networkidle", timeout=5000)
+        except PlaywrightTimeoutError:
+            # Network didn't settle, continue anyway
+            pass
 
         # Check for error first
         error_msg_selector = "#GLUXZipError"
@@ -183,32 +191,74 @@ class LocationHandler:
             # If we didn't find a button, maybe it auto-refreshed?
             pass
 
-        # 6. Wait for page reload
-        # Changing location usually triggers a reload. We should wait for the location to update.
-        try:
-            await self.page.wait_for_load_state("domcontentloaded")
-        except Exception:
-            pass
+        # 6. Wait for page reload with proper navigation handling
+        # Amazon often triggers a delayed page refresh after location change
+        await self._wait_for_location_update(zip_code)
 
-        # Ensure modal is gone
-        # The scroller or popover might linger
-        try:
-            await self.page.wait_for_selector(".a-modal-scroller", state="hidden", timeout=5000)
-        except Exception:
-            # Force close if still present
-            await self.page.keyboard.press("Escape")
+    async def _wait_for_location_update(self, zip_code: str, max_attempts: int = 5):
+        """
+        Waits for Amazon to complete the location update, handling delayed refreshes.
+        """
+        for attempt in range(max_attempts):
+            try:
+                # First, wait for any pending navigation to complete
+                await self.page.wait_for_load_state("domcontentloaded", timeout=3000)
+            except PlaywrightTimeoutError:
+                pass
 
-        # 7. Verification
-        # Retries for verification as the DOM might take a moment to update text
-        for _ in range(3):
+            # Check if modal is still visible (location change in progress)
+            modal_visible = False
+            try:
+                modal_visible = await self.page.is_visible(".a-modal-scroller", )
+            except Exception:
+                pass
+
+            if modal_visible:
+                # Modal still open, wait a bit and check if it closes or page refreshes
+                logger.info(f"Modal still visible, waiting... (attempt {attempt + 1}/{max_attempts})")
+                await asyncio.sleep(1)
+                continue
+
+            # Modal closed, now wait for location text to stabilize
+            # The page might still be refreshing
+            try:
+                # Wait for the location element to be present
+                await self.page.wait_for_selector("#glow-ingress-line2", timeout=5000)
+            except PlaywrightTimeoutError:
+                # Page might be mid-refresh, wait and retry
+                logger.info(f"Location element not found, page may be refreshing (attempt {attempt + 1})")
+                await asyncio.sleep(2)
+                continue
+
+            # Check if location matches
             if await self.verify_location(zip_code):
+                logger.info(f"Location verified: {zip_code}")
                 return
+
+            # Location doesn't match yet - could be stale DOM or refresh pending
+            # Wait a moment for potential late refresh
+            logger.info(f"Location not yet matching, waiting for potential refresh (attempt {attempt + 1})")
+
+            # Watch for navigation that might happen
+            try:
+                # Wait briefly to see if a navigation starts
+                await self.page.wait_for_load_state("networkidle", timeout=3000)
+            except PlaywrightTimeoutError:
+                pass
+
             await asyncio.sleep(1)
 
-        # Final check
+        # All attempts exhausted, do final verification
+        await self.check_for_captcha()
+
         if not await self.verify_location(zip_code):
-             current_loc = await self.page.inner_text("#glow-ingress-line2") if await self.page.query_selector("#glow-ingress-line2") else "Unknown"
-             raise LocationVerificationError(f"Failed to set location to {zip_code}. Current location: {current_loc}")
+            current_loc = "Unknown"
+            try:
+                if await self.page.query_selector("#glow-ingress-line2"):
+                    current_loc = await self.page.inner_text("#glow-ingress-line2")
+            except Exception:
+                pass
+            raise LocationVerificationError(f"Failed to set location to {zip_code}. Current location: {current_loc}")
 
     async def check_for_captcha(self):
         """

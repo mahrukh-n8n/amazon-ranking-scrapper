@@ -1,9 +1,9 @@
 [project]
 name = "amz-geo-rank-scraper"
-version = "0.1.0"
-description = "Amazon Geo-Rank Scraper"
+version = "1.0.0"
+description = "Amazon Geo-Rank Scraper - Check product rankings from specific geographic locations"
 authors = [
-    {name = "Antigravity",email = "noreply@anthropic.com"}
+    {name = "Consologist.com", email = "contact@consologist.com"}
 ]
 readme = "README.md"
 requires-python = "^3.11"
