@@ -1,11 +1,15 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel,
     QPlainTextEdit, QFileDialog, QHBoxLayout, QGroupBox,
-    QLineEdit, QCheckBox, QFormLayout, QComboBox, QTimeEdit
+    QLineEdit, QCheckBox, QFormLayout, QComboBox, QTimeEdit,
+    QSystemTrayIcon, QMenu, QStyle, QApplication
 )
-from PyQt6.QtCore import QTime
+from PyQt6.QtGui import QAction, QIcon, QCloseEvent
+from PyQt6.QtCore import QTime, Qt
 from qasync import asyncSlot
 import logging
+import json
+import os
 from src.scraper_controller import ScraperController
 from src.ui.log_handler import LogHandler
 from src.data_loader import DataLoader
@@ -53,6 +57,7 @@ class MainWindow(QMainWindow):
         self.edit_webhook = QLineEdit()
         self.edit_webhook.setPlaceholderText("https://webhook.site/...")
         self.edit_webhook.textChanged.connect(self.update_controller_settings)
+        self.edit_webhook.editingFinished.connect(self.save_settings)
         settings_layout.addRow("Webhook URL:", self.edit_webhook)
 
         self.cb_webhook_enabled = QCheckBox("Enable Webhook Integration")
@@ -61,7 +66,12 @@ class MainWindow(QMainWindow):
 
         self.cb_notify_enabled = QCheckBox("Enable Desktop Notification on Completion")
         self.cb_notify_enabled.setChecked(True)
+        self.cb_notify_enabled.toggled.connect(self.save_settings)
         settings_layout.addRow("", self.cb_notify_enabled)
+
+        self.cb_minimize_tray = QCheckBox("Minimize to Tray on Close")
+        self.cb_minimize_tray.toggled.connect(self.save_settings)
+        settings_layout.addRow("", self.cb_minimize_tray)
 
         layout.addWidget(settings_group)
 
@@ -154,10 +164,152 @@ class MainWindow(QMainWindow):
         # Setup Logging
         self.setup_logging()
 
+        # Setup System Tray
+        self.setup_system_tray()
+
+        # Load Settings
+        self.load_settings()
+
+    def setup_system_tray(self):
+        """Initialize the system tray icon and menu."""
+        self.tray_icon = QSystemTrayIcon(self)
+
+        # Use a standard icon since we don't have a custom one yet
+        icon = self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+        self.tray_icon.setIcon(icon)
+
+        # Context Menu
+        tray_menu = QMenu()
+
+        restore_action = QAction("Restore", self)
+        restore_action.triggered.connect(self.show_window)
+        tray_menu.addAction(restore_action)
+
+        run_now_action = QAction("Run Job Now", self)
+        run_now_action.triggered.connect(self.on_start_clicked)
+        tray_menu.addAction(run_now_action)
+
+        quit_action = QAction("Exit", self)
+        quit_action.triggered.connect(self.quit_application)
+        tray_menu.addAction(quit_action)
+
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self.on_tray_icon_activated)
+        self.tray_icon.show()
+
+    def on_tray_icon_activated(self, reason):
+        """Handle tray icon clicks."""
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self.show_window()
+
+    def show_window(self):
+        """Restore the window from tray."""
+        self.show()
+        self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized | Qt.WindowState.WindowActive)
+        self.activateWindow()
+
+    def quit_application(self):
+        """Exit the application completely."""
+        QApplication.quit()
+
+    def closeEvent(self, event: QCloseEvent):
+        """Handle window close event for tray minimization."""
+        if self.cb_minimize_tray.isChecked() and self.tray_icon.isVisible():
+            self.hide()
+            self.tray_icon.showMessage(
+                "Amazon Geo-Rank Scraper",
+                "Application minimized to tray. It will continue running in the background.",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000
+            )
+            event.ignore()
+        else:
+            event.accept()
+
+    def load_settings(self):
+        """Load application settings from JSON file."""
+        try:
+            if os.path.exists("settings.json"):
+                with open("settings.json", "r") as f:
+                    settings = json.load(f)
+
+                # Block signals to prevent triggering save_settings during load
+                self.edit_webhook.blockSignals(True)
+                self.cb_webhook_enabled.blockSignals(True)
+                self.cb_notify_enabled.blockSignals(True)
+                self.cb_minimize_tray.blockSignals(True)
+                self.cb_schedule_enabled.blockSignals(True)
+                self.combo_recurrence.blockSignals(True)
+                self.time_edit.blockSignals(True)
+
+                self.edit_webhook.setText(settings.get("webhook_url", ""))
+                self.cb_webhook_enabled.setChecked(settings.get("webhook_enabled", False))
+                self.cb_notify_enabled.setChecked(settings.get("notify_enabled", True))
+                self.cb_minimize_tray.setChecked(settings.get("minimize_to_tray", False))
+
+                self.cb_schedule_enabled.setChecked(settings.get("schedule_enabled", False))
+                self.combo_recurrence.setCurrentText(settings.get("recurrence", "Daily"))
+
+                time_str = settings.get("schedule_time", "12:00")
+                self.time_edit.setTime(QTime.fromString(time_str, "HH:mm"))
+
+                # Unblock signals
+                self.edit_webhook.blockSignals(False)
+                self.cb_webhook_enabled.blockSignals(False)
+                self.cb_notify_enabled.blockSignals(False)
+                self.cb_minimize_tray.blockSignals(False)
+                self.cb_schedule_enabled.blockSignals(False)
+                self.combo_recurrence.blockSignals(False)
+                self.time_edit.blockSignals(False)
+
+                # Manually trigger updates that don't save but sync controller
+                # Actually, setting the UI values is enough if we just want to restore state.
+                # But we do need to update the controller's internal state for scheduling/webhooks
+                # without triggering a save.
+                self.controller.webhook_url = self.edit_webhook.text().strip()
+                self.controller.webhook_enabled = self.cb_webhook_enabled.isChecked()
+
+                if self.cb_schedule_enabled.isChecked():
+                    # We can call update_scheduling but we need to ensure IT doesn't save
+                    # update_scheduling calls save_settings at the end.
+                    # We should probably refactor update_scheduling or just call the controller method directly here.
+                    recurrence = self.combo_recurrence.currentText()
+                    time_str = self.time_edit.time().toString("HH:mm")
+                    self.controller.schedule_job(recurrence, time_str)
+
+                    next_run = self.controller.get_next_run()
+                    if next_run:
+                        self.lbl_next_run.setText(f"Next Run: {next_run}")
+                    else:
+                        self.lbl_next_run.setText("Next Run: Error")
+
+                logging.info("Settings loaded from settings.json")
+        except Exception as e:
+            logging.error(f"Failed to load settings: {e}")
+
+    def save_settings(self):
+        """Save application settings to JSON file."""
+        settings = {
+            "webhook_url": self.edit_webhook.text(),
+            "webhook_enabled": self.cb_webhook_enabled.isChecked(),
+            "notify_enabled": self.cb_notify_enabled.isChecked(),
+            "minimize_to_tray": self.cb_minimize_tray.isChecked(),
+            "schedule_enabled": self.cb_schedule_enabled.isChecked(),
+            "recurrence": self.combo_recurrence.currentText(),
+            "schedule_time": self.time_edit.time().toString("HH:mm"),
+        }
+        try:
+            with open("settings.json", "w") as f:
+                json.dump(settings, f, indent=4)
+            logging.info("Settings saved to settings.json")
+        except Exception as e:
+            logging.error(f"Failed to save settings: {e}")
+
     def update_controller_settings(self):
         """Sync UI settings with controller."""
         self.controller.webhook_url = self.edit_webhook.text().strip()
         self.controller.webhook_enabled = self.cb_webhook_enabled.isChecked()
+        self.save_settings()
 
     def update_scheduling(self):
         """Update scheduling configuration in controller."""
@@ -177,6 +329,8 @@ class MainWindow(QMainWindow):
             # Disable scheduling
             self.controller.scheduler.remove_all_jobs()
             self.lbl_next_run.setText("Next Run: Disabled")
+
+        self.save_settings()
 
     def setup_logging(self):
         # Create custom handler
@@ -259,6 +413,16 @@ class MainWindow(QMainWindow):
 
     def on_job_started_signal(self):
         """Handle job started signal from controller (e.g. via scheduler)."""
+
+        # Notify if in tray
+        if self.isHidden() and self.tray_icon.isVisible():
+            self.tray_icon.showMessage(
+                "Job Started",
+                "Scheduled Amazon scraping job has started.",
+                QSystemTrayIcon.MessageIcon.Information,
+                3000
+            )
+
         self.lbl_status.setText("Status: Running (Scheduled)")
         self.lbl_status.setStyleSheet("font-weight: bold; color: green;")
         self.btn_start.setEnabled(False)
@@ -297,4 +461,13 @@ class MainWindow(QMainWindow):
 
         if self.cb_notify_enabled.isChecked():
             self.notifier.play_completion_alert()
+
+        # Notify if in tray
+        if self.isHidden() and self.tray_icon.isVisible():
+            self.tray_icon.showMessage(
+                "Job Finished",
+                "Amazon scraping job has completed.",
+                QSystemTrayIcon.MessageIcon.Information,
+                3000
+            )
 
