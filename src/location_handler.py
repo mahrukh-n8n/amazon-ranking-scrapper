@@ -12,25 +12,48 @@ class LocationHandler:
 
     async def verify_location(self, target_zip: str) -> bool:
         """
-        Verifies if the current 'Deliver to' location matches the target zip code.
+        Verifies if the current 'Deliver to' location matches the target zip/postal code.
         Returns True if matches, False otherwise.
         """
         try:
             # Selector for the 'Deliver to' line in the top nav
-            # Usually: "Deliver to New York 10001" or similar
+            # Usually: "Deliver to New York 10001" or "London SW1A 1"
             selector = "#glow-ingress-line2"
             await self.page.wait_for_selector(selector, timeout=5000)
 
             location_text = await self.page.inner_text(selector)
 
-            # Simple check: is the zip code in the text?
-            # Amazon often shows "Deliver to City Zip"
-            if target_zip in location_text:
+            # Normalize both for comparison (uppercase, remove extra spaces)
+            location_upper = location_text.upper().strip()
+            target_upper = target_zip.upper().strip()
+
+            # Direct match (case-insensitive)
+            if target_upper in location_upper:
                 return True
 
-            # Sometimes it might just say "New York" without zip if the window is small
-            # But usually for zip based location, it shows the zip or city associated.
-            # Let's trust strict zip matching for now as per requirements.
+            # For UK postal codes: Amazon often shows only outward code (e.g., "SW1A 1" not "SW1A 1AA")
+            # Extract the outward code (first part before space) and check
+            target_parts = target_upper.split()
+            if target_parts:
+                # Check if outward code (first part) is in the location
+                outward_code = target_parts[0]
+                if outward_code in location_upper:
+                    return True
+
+                # Also check combined first two parts for UK format (e.g., "SW1A 1")
+                if len(target_parts) >= 2:
+                    partial_code = f"{target_parts[0]} {target_parts[1][0]}" if len(target_parts[1]) > 0 else target_parts[0]
+                    if partial_code in location_upper:
+                        return True
+
+            # For US ZIP codes: check just the 5-digit part
+            # Extract digits from target and check
+            target_digits = ''.join(filter(str.isdigit, target_upper))
+            if len(target_digits) >= 5:
+                zip5 = target_digits[:5]
+                if zip5 in location_upper:
+                    return True
+
             return False
 
         except PlaywrightTimeoutError:
