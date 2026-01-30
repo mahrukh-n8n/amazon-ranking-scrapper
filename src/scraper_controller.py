@@ -6,6 +6,8 @@ import httpx
 from datetime import datetime
 import pandas as pd
 from PyQt6.QtCore import QObject, pyqtSignal
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from src.browser_manager import BrowserManager
 from src.scraper import AmazonScraper
 from src.exceptions import CaptchaDetectedError, LocationVerificationError
@@ -17,6 +19,7 @@ class ScraperController(QObject):
     paused = pyqtSignal()
     resumed = pyqtSignal()
     task_started = pyqtSignal(int, int)  # (current_task, total_tasks)
+    job_started = pyqtSignal()
     job_finished = pyqtSignal()
 
     def __init__(self):
@@ -35,10 +38,57 @@ class ScraperController(QObject):
         self.webhook_url = ""
         self.webhook_enabled = False
 
+        self.scheduler = AsyncIOScheduler()
+        self.scheduler.start()
+
     def set_tasks(self, tasks: list):
         """Sets the list of tasks to process."""
         self.tasks = tasks
         self.current_task_index = 0
+
+    def schedule_job(self, recurrence: str, time_str: str):
+        """
+        Schedules a scraping job.
+        recurrence: 'Daily' or 'Weekly'
+        time_str: HH:MM
+        """
+        # Clear existing scheduled jobs for scraping
+        self.scheduler.remove_all_jobs()
+
+        if not recurrence or not time_str:
+            logger.info("Scheduling disabled or incomplete config provided.")
+            return
+
+        try:
+            hour, minute = map(int, time_str.split(':'))
+
+            if recurrence == 'Daily':
+                trigger = CronTrigger(hour=hour, minute=minute)
+            elif recurrence == 'Weekly':
+                # Default to Monday for weekly if not specified, or just same time every week from now?
+                # Plan says "Weekly (cron: day_of_week, hour, minute)".
+                # I'll default to day_of_week=0 (Monday) for now as a simple implementation.
+                trigger = CronTrigger(day_of_week=0, hour=hour, minute=minute)
+            else:
+                logger.error(f"Unsupported recurrence: {recurrence}")
+                return
+
+            self.scheduler.add_job(
+                self.start_job,
+                trigger=trigger,
+                id='amazon_scraping_job',
+                replace_existing=True
+            )
+            logger.info(f"Job scheduled: {recurrence} at {time_str}")
+        except Exception as e:
+            logger.error(f"Failed to schedule job: {e}")
+
+    def get_next_run(self):
+        """Returns the timestamp of the next scheduled run or None."""
+        job = self.scheduler.get_job('amazon_scraping_job')
+        if job and job.next_run_time:
+            return job.next_run_time.strftime("%Y-%m-%d %H:%M:%S")
+        return None
 
     def pause_job(self):
         """Pauses the job."""
@@ -78,6 +128,7 @@ class ScraperController(QObject):
         self.pause_event.set()  # Ensure not paused at start
         self.current_marketplace = None  # Reset marketplace tracking
         self.all_results = []
+        self.job_started.emit()
 
         logger.info(f"Starting job with {len(self.tasks)} tasks...")
 
