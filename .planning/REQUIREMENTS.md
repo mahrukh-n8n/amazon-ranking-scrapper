@@ -1,0 +1,60 @@
+# Requirements: Amazon Geo-Rank Scraper
+
+**Defined:** 2026-01-30
+**Core Value:** Accurate Geo-Rank extraction validation (Zip Code persistence).
+
+## v1 Requirements
+
+Requirements for initial release.
+
+### Core Scraper
+- [ ] **SCRAPE-01**: System can successfully set Amazon Delivery Zip Code via UI interaction.
+- [ ] **SCRAPE-02**: System verifies "Deliver to" location matches target Zip Code before scraping.
+- [ ] **SCRAPE-03**: System pauses and alerts user (sound/focus) when Captcha is detected.
+- [ ] **SCRAPE-04**: System persists session cookies to reuse location settings across runs.
+- [ ] **SCRAPE-05**: System runs in "Headed" mode (visible browser) by default.
+
+### Data Management
+- [ ] **DATA-01**: User can load job files (Excel/CSV) with columns: Marketplace, Zip Code, ASINs, Keywords.
+- [ ] **DATA-02**: System exports results (Rank, Page, ASIN, Keyword, Date) to CSV/Excel.
+- [ ] **DATA-03**: (Optional) System can push results via HTTP POST to a webhook URL (e.g., n8n).
+
+### User Interface
+- [ ] **UI-01**: User can Start, Pause, and Stop the scraping job.
+- [ ] **UI-02**: User sees real-time activity log (e.g., "Setting Zip to 10001...", "Searching 'shoes'...").
+- [ ] **UI-03**: System displays desktop notification when job is complete.
+
+## v2 Requirements
+
+Deferred to future release.
+
+- **DATA-04**: Screenshot Evidence (Capture image of rank position).
+- **UI-04**: Visual Dashboard/Charts of rank history.
+- **CORE-06**: Proxy rotation integration (API-based).
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Headless Execution | Browser stealth requires visible rendering; user wants verification. |
+| Automated Captcha Solving | High cost/complexity; manual intervention preferred. |
+| Server Deployment | Desktop-first design; "Deliver to" logic fragile on server IPs. |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SCRAPE-01 | - | Pending |
+| SCRAPE-02 | - | Pending |
+| SCRAPE-03 | - | Pending |
+| SCRAPE-04 | - | Pending |
+| SCRAPE-05 | - | Pending |
+| DATA-01 | - | Pending |
+| DATA-02 | - | Pending |
+| DATA-03 | - | Pending |
+| UI-01 | - | Pending |
+| UI-02 | - | Pending |
+| UI-03 | - | Pending |
+
+---
+*Requirements defined: 2026-01-30*
