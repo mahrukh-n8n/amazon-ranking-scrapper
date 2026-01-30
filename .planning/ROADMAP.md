@@ -72,7 +72,7 @@ Plans:
 - [x] 03-01-PLAN.md - Multi-ASIN Support & Result Saving (Implemented)
 - [x] 03-02-PLAN.md - Desktop notifications & Optional Webhook
 
-### Phase 4: Scheduling & Automation (Planned)
+### Phase 4: Scheduling & Automation
 **Goal:** Automate periodic runs without manual intervention.
 **Dependencies:** Phase 3
 **Plans:** 2 plans
@@ -83,8 +83,8 @@ Plans:
 - **AUTO-03**: Application maintains state to trigger jobs at scheduled intervals.
 
 Plans:
-- [ ] 04-01-PLAN.md — Core scheduling logic and UI integration
-- [ ] 04-02-PLAN.md — System tray integration and settings persistence
+- [x] 04-01-PLAN.md — Core scheduling logic and UI integration
+- [x] 04-02-PLAN.md — System tray integration and settings persistence
 
 ## Progress
 
@@ -93,4 +93,4 @@ Plans:
 | 1 - Core Geo-Scraper Engine | Complete | 100% |
 | 2 - Interactive Desktop UI | Complete | 100% |
 | 3 - Output & Integration | Complete | 100% |
-| 4 - Scheduling & Automation | Planned | 0% |
+| 4 - Scheduling & Automation | Complete | 100% |
