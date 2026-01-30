@@ -14,6 +14,7 @@ This roadmap delivers a Python-based desktop application for checking Amazon pro
 ### Phase 1: Core Geo-Scraper Engine
 **Goal:** Scraper correctly simulates a localized user and extracts ranks.
 **Dependencies:** None
+**Plans:** 1 plan
 
 **Requirements:**
 - **SCRAPE-01**: System can successfully set Amazon Delivery Zip Code via UI interaction.
@@ -27,9 +28,13 @@ This roadmap delivers a Python-based desktop application for checking Amazon pro
 3. Script aborts/retries if location verification fails (preventing bad data).
 4. Correct rank position is identified for a known ASIN/Keyword pair.
 
+Plans:
+- [x] 01-01-PLAN.md - Core scraper engine with browser, location, and search
+
 ### Phase 2: Interactive Desktop UI
 **Goal:** User can manage the scraping session without touching code.
 **Dependencies:** Phase 1
+**Plans:** 2 plans
 
 **Requirements:**
 - **UI-01**: User can Start, Pause, and Stop the scraping job.
@@ -43,6 +48,10 @@ This roadmap delivers a Python-based desktop application for checking Amazon pro
 3. User can start the job and see real-time log updates in the window.
 4. App automatically pauses and requests attention when a Captcha appears.
 5. User can resume the job after solving the Captcha manually.
+
+Plans:
+- [ ] 02-01-PLAN.md - Controller enhancements (pause/resume + captcha alerting)
+- [ ] 02-02-PLAN.md - UI integration (buttons, progress, wire everything)
 
 ### Phase 3: Output & Integration
 **Goal:** Usable data is delivered at the end of the session.
@@ -59,10 +68,13 @@ This roadmap delivers a Python-based desktop application for checking Amazon pro
 3. Results include verified Rank, Page, and Timestamp.
 4. (If configured) JSON payload is received by the test webhook endpoint.
 
+Plans:
+- [ ] TBD (created by /gsd:plan-phase)
+
 ## Progress
 
 | Phase | Status | Completion |
 |-------|--------|------------|
-| 1 - Core Geo-Scraper Engine | **Pending** | 0% |
-| 2 - Interactive Desktop UI | Pending | 0% |
+| 1 - Core Geo-Scraper Engine | Complete | 100% |
+| 2 - Interactive Desktop UI | **Planned** | 0% |
 | 3 - Output & Integration | Pending | 0% |
