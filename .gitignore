@@ -155,3 +155,4 @@ test_user_data/
 *.csv
 launch claude.bat
 how to .txt
+settings.json
