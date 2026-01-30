@@ -40,7 +40,7 @@ Plans:
 - **UI-01**: User can Start, Pause, and Stop the scraping job.
 - **UI-02**: User sees real-time activity log (e.g., "Setting Zip to 10001...", "Searching 'shoes'...").
 - **SCRAPE-03**: System pauses and alerts user (sound/focus) when Captcha is detected.
-- **DATA-01**: User can load job files (Excel/CSV) with columns: Marketplace, Zip Code, ASINs, Keywords. *(Completed in Phase 1 prep - DataLoader exists)*
+- **DATA-01**: User can load job files (Excel/CSV) with columns: Marketplace, Zip Code, ASINs, Keywords.
 
 **Success Criteria:**
 1. User can launch the application window.
@@ -50,15 +50,15 @@ Plans:
 5. User can resume the job after solving the Captcha manually.
 
 Plans:
-- [ ] 02-01-PLAN.md - Controller enhancements (pause/resume + captcha alerting + progress signals)
-- [ ] 02-02-PLAN.md - UI integration (buttons, progress, wire everything)
+- [x] 02-01-PLAN.md - Controller enhancements (pause/resume + captcha alerting + progress signals)
+- [x] 02-02-PLAN.md - UI integration (buttons, progress, wire everything)
 
 ### Phase 3: Output & Integration
 **Goal:** Usable data is delivered at the end of the session.
 **Dependencies:** Phase 2
 
 **Requirements:**
-- **DATA-02**: System exports results (Rank, Page, ASIN, Keyword, Date) to CSV/Excel.
+- **DATA-02**: System exports results (Rank, Page, ASIN, Keyword, Date) to CSV/Excel. *(Implemented)*
 - **DATA-03**: (Optional) System can push results via HTTP POST to a webhook URL (e.g., n8n).
 - **UI-03**: System displays desktop notification when job is complete.
 
@@ -69,12 +69,13 @@ Plans:
 4. (If configured) JSON payload is received by the test webhook endpoint.
 
 Plans:
-- [ ] TBD (created by /gsd:plan-phase)
+- [x] 03-01-PLAN.md - Multi-ASIN Support & Result Saving (Implemented)
+- [ ] 03-02-PLAN.md - Desktop notifications & Optional Webhook
 
 ## Progress
 
 | Phase | Status | Completion |
 |-------|--------|------------|
 | 1 - Core Geo-Scraper Engine | Complete | 100% |
-| 2 - Interactive Desktop UI | **Planned** | 0% |
-| 3 - Output & Integration | Pending | 0% |
+| 2 - Interactive Desktop UI | Complete | 100% |
+| 3 - Output & Integration | **In Progress** | 50% |
