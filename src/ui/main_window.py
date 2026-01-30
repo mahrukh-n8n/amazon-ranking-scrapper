@@ -1,19 +1,23 @@
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QPlainTextEdit, QFileDialog, QHBoxLayout
+from PyQt6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel,
+    QPlainTextEdit, QFileDialog, QHBoxLayout, QGroupBox,
+    QLineEdit, QCheckBox, QFormLayout
+)
 from qasync import asyncSlot
 import logging
 from src.scraper_controller import ScraperController
 from src.ui.log_handler import LogHandler
 from src.data_loader import DataLoader
-from src.captcha_alerter import CaptchaAlerter
+from src.notification_manager import NotificationManager
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Amazon Geo-Rank Scraper")
-        self.resize(800, 600)
+        self.resize(800, 700)
 
         self.controller = ScraperController()
-        self.alerter = CaptchaAlerter(self)
+        self.notifier = NotificationManager(self)
 
         # Central Widget
         central_widget = QWidget()
@@ -39,6 +43,26 @@ class MainWindow(QMainWindow):
         file_layout.addWidget(self.lbl_tasks)
 
         layout.addLayout(file_layout)
+
+        # Settings Section
+        settings_group = QGroupBox("Settings")
+        settings_layout = QFormLayout()
+        settings_group.setLayout(settings_layout)
+
+        self.edit_webhook = QLineEdit()
+        self.edit_webhook.setPlaceholderText("https://webhook.site/...")
+        self.edit_webhook.textChanged.connect(self.update_controller_settings)
+        settings_layout.addRow("Webhook URL:", self.edit_webhook)
+
+        self.cb_webhook_enabled = QCheckBox("Enable Webhook Integration")
+        self.cb_webhook_enabled.stateChanged.connect(self.update_controller_settings)
+        settings_layout.addRow("", self.cb_webhook_enabled)
+
+        self.cb_notify_enabled = QCheckBox("Enable Desktop Notification on Completion")
+        self.cb_notify_enabled.setChecked(True)
+        settings_layout.addRow("", self.cb_notify_enabled)
+
+        layout.addWidget(settings_group)
 
         # Control Buttons Layout
         btn_layout = QHBoxLayout()
@@ -98,6 +122,11 @@ class MainWindow(QMainWindow):
 
         # Setup Logging
         self.setup_logging()
+
+    def update_controller_settings(self):
+        """Sync UI settings with controller."""
+        self.controller.webhook_url = self.edit_webhook.text().strip()
+        self.controller.webhook_enabled = self.cb_webhook_enabled.isChecked()
 
     def setup_logging(self):
         # Create custom handler
@@ -184,7 +213,7 @@ class MainWindow(QMainWindow):
         self.lbl_status.setStyleSheet("font-weight: bold; color: red;")
         self.btn_pause.setEnabled(False)
         self.btn_resume.setEnabled(True)
-        self.alerter.play_alert()
+        self.notifier.play_captcha_alert()
 
     def on_task_started(self, current: int, total: int):
         """Handle task started signal from controller."""
@@ -192,6 +221,11 @@ class MainWindow(QMainWindow):
 
     def on_job_finished(self):
         """Handle job finished signal from controller."""
+        # Only trigger completion notification if it's actually finishing (not just returning from await)
+        # We check if it's currently Idle to avoid double-triggering
+        if self.lbl_status.text() == "Status: Idle":
+            return
+
         self.lbl_status.setText("Status: Idle")
         self.lbl_status.setStyleSheet("font-weight: bold; color: black;")
         self.lbl_progress.setText("Progress: 0/0")
@@ -200,4 +234,7 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.btn_pause.setEnabled(False)
         self.btn_resume.setEnabled(False)
+
+        if self.cb_notify_enabled.isChecked():
+            self.notifier.play_completion_alert()
 

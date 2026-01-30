@@ -33,7 +33,7 @@ async def test_search_keyword(mock_browser_manager):
     scraper.page.press.assert_called_with("#twotabsearchtextbox", "Enter")
 
 @pytest.mark.asyncio
-async def test_find_asin_rank_found(mock_browser_manager):
+async def test_find_asins_ranks_found(mock_browser_manager):
     scraper = AmazonScraper(mock_browser_manager)
     await scraper.initialize()
 
@@ -50,14 +50,15 @@ async def test_find_asin_rank_found(mock_browser_manager):
     scraper.page.wait_for_selector = AsyncMock()
     scraper.page.query_selector_all = AsyncMock(return_value=[result_1, result_2, result_3])
 
-    result = await scraper.find_asin_rank("ASIN2")
+    results = await scraper.find_asins_ranks(["ASIN2"])
+    result = results[0]
 
     assert result["found"] is True
     assert result["rank"] == 2
     assert result["page"] == 1
 
 @pytest.mark.asyncio
-async def test_find_asin_rank_not_found(mock_browser_manager):
+async def test_find_asins_ranks_not_found(mock_browser_manager):
     scraper = AmazonScraper(mock_browser_manager)
     await scraper.initialize()
 
@@ -68,7 +69,8 @@ async def test_find_asin_rank_not_found(mock_browser_manager):
     scraper.page.wait_for_selector = AsyncMock()
     scraper.page.query_selector_all = AsyncMock(return_value=[result_1])
 
-    result = await scraper.find_asin_rank("ASIN99")
+    results = await scraper.find_asins_ranks(["ASIN99"])
+    result = results[0]
 
     assert result["found"] is False
     assert result["rank"] == -1

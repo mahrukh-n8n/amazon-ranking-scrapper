@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 import os
+import httpx
 from datetime import datetime
 import pandas as pd
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -31,6 +32,8 @@ class ScraperController(QObject):
         self.pause_event.set()  # Not paused initially
         self.current_marketplace = None  # Track current marketplace for navigation
         self.all_results = []
+        self.webhook_url = ""
+        self.webhook_enabled = False
 
     def set_tasks(self, tasks: list):
         """Sets the list of tasks to process."""
@@ -188,11 +191,32 @@ class ScraperController(QObject):
         """Cleans up resources and saves results."""
         if self.all_results:
             self.save_results()
+            if self.webhook_enabled and self.webhook_url:
+                await self._send_webhook()
 
         if self.scraper:
             await self.scraper.close()
         self.scraper = None
         self.browser_manager = None
+
+    async def _send_webhook(self):
+        """Sends results to the configured webhook URL."""
+        if not self.webhook_url:
+            return
+
+        logger.info(f"Sending results to webhook: {self.webhook_url}")
+        try:
+            async with httpx.AsyncClient() as client:
+                payload = {
+                    "timestamp": datetime.now().isoformat(),
+                    "total_results": len(self.all_results),
+                    "results": self.all_results
+                }
+                response = await client.post(self.webhook_url, json=payload)
+                response.raise_for_status()
+                logger.info("Webhook sent successfully.")
+        except Exception as e:
+            logger.error(f"Failed to send webhook: {e}")
 
     def save_results(self):
         """Saves accumulated results to a CSV file."""
