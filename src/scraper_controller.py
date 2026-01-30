@@ -25,6 +25,7 @@ class ScraperController(QObject):
         self.current_task_index = 0
         self.pause_event = asyncio.Event()
         self.pause_event.set()  # Not paused initially
+        self.current_marketplace = None  # Track current marketplace for navigation
 
     def set_tasks(self, tasks: list):
         """Sets the list of tasks to process."""
@@ -67,6 +68,7 @@ class ScraperController(QObject):
         self.is_running = True
         self.should_stop = False
         self.pause_event.set()  # Ensure not paused at start
+        self.current_marketplace = None  # Reset marketplace tracking
 
         logger.info(f"Starting job with {len(self.tasks)} tasks...")
 
@@ -79,14 +81,22 @@ class ScraperController(QObject):
 
             if self.check_stop(): return
 
-            await self.scraper.go_to_home()
-
             for i, task in enumerate(self.tasks):
                 if self.check_stop(): break
                 self.current_task_index = i
                 self.task_started.emit(i + 1, len(self.tasks))
 
-                logger.info(f"Processing Task {i+1}/{len(self.tasks)}: {task['keyword']} (ASIN: {task['asin']}) in {task['zip_code']}")
+                task_marketplace = task.get('marketplace', 'amazon.com')
+                logger.info(f"Processing Task {i+1}/{len(self.tasks)}: {task['keyword']} (ASIN: {task['asin']}) in {task['zip_code']} on {task_marketplace}")
+
+                # Navigate to marketplace if changed or first task
+                if self.current_marketplace != task_marketplace:
+                    logger.info(f"Switching marketplace to {task_marketplace}")
+                    await self.scraper.go_to_home(task_marketplace)
+                    self.current_marketplace = task_marketplace
+
+                    await self.pause_event.wait()
+                    if self.check_stop(): break
 
                 # Retry loop for the task
                 task_complete = False
