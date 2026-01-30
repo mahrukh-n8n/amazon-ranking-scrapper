@@ -1,8 +1,9 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel,
     QPlainTextEdit, QFileDialog, QHBoxLayout, QGroupBox,
-    QLineEdit, QCheckBox, QFormLayout
+    QLineEdit, QCheckBox, QFormLayout, QComboBox, QTimeEdit
 )
+from PyQt6.QtCore import QTime
 from qasync import asyncSlot
 import logging
 from src.scraper_controller import ScraperController
@@ -64,6 +65,35 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(settings_group)
 
+        # Scheduling Section
+        scheduling_group = QGroupBox("Scheduling")
+        scheduling_layout = QFormLayout()
+        scheduling_group.setLayout(scheduling_layout)
+
+        self.cb_schedule_enabled = QCheckBox("Enable Scheduled Runs")
+        self.cb_schedule_enabled.toggled.connect(self.update_scheduling)
+        scheduling_layout.addRow(self.cb_schedule_enabled)
+
+        hbox_schedule = QHBoxLayout()
+
+        self.combo_recurrence = QComboBox()
+        self.combo_recurrence.addItems(["Daily", "Weekly"])
+        self.combo_recurrence.currentTextChanged.connect(self.update_scheduling)
+        hbox_schedule.addWidget(self.combo_recurrence)
+
+        self.time_edit = QTimeEdit()
+        self.time_edit.setDisplayFormat("HH:mm")
+        self.time_edit.setTime(QTime.currentTime().addSecs(3600)) # Default to 1 hour from now
+        self.time_edit.timeChanged.connect(self.update_scheduling)
+        hbox_schedule.addWidget(self.time_edit)
+
+        scheduling_layout.addRow("Recurrence & Time:", hbox_schedule)
+
+        self.lbl_next_run = QLabel("Next Run: None")
+        scheduling_layout.addRow(self.lbl_next_run)
+
+        layout.addWidget(scheduling_group)
+
         # Control Buttons Layout
         btn_layout = QHBoxLayout()
 
@@ -95,6 +125,7 @@ class MainWindow(QMainWindow):
         self.controller.captcha_detected.connect(self.on_captcha_detected)
         self.controller.task_started.connect(self.on_task_started)
         self.controller.job_finished.connect(self.on_job_finished)
+        self.controller.job_started.connect(self.on_job_started_signal)
 
         layout.addLayout(btn_layout)
 
@@ -127,6 +158,25 @@ class MainWindow(QMainWindow):
         """Sync UI settings with controller."""
         self.controller.webhook_url = self.edit_webhook.text().strip()
         self.controller.webhook_enabled = self.cb_webhook_enabled.isChecked()
+
+    def update_scheduling(self):
+        """Update scheduling configuration in controller."""
+        if self.cb_schedule_enabled.isChecked():
+            recurrence = self.combo_recurrence.currentText()
+            time_str = self.time_edit.time().toString("HH:mm")
+
+            self.controller.schedule_job(recurrence, time_str)
+
+            # Update Next Run label
+            next_run = self.controller.get_next_run()
+            if next_run:
+                self.lbl_next_run.setText(f"Next Run: {next_run}")
+            else:
+                self.lbl_next_run.setText("Next Run: Error")
+        else:
+            # Disable scheduling
+            self.controller.scheduler.remove_all_jobs()
+            self.lbl_next_run.setText("Next Run: Disabled")
 
     def setup_logging(self):
         # Create custom handler
@@ -204,6 +254,16 @@ class MainWindow(QMainWindow):
         """Handle job resumed signal from controller."""
         self.lbl_status.setText("Status: Running")
         self.lbl_status.setStyleSheet("font-weight: bold; color: green;")
+        self.btn_pause.setEnabled(True)
+        self.btn_resume.setEnabled(False)
+
+    def on_job_started_signal(self):
+        """Handle job started signal from controller (e.g. via scheduler)."""
+        self.lbl_status.setText("Status: Running (Scheduled)")
+        self.lbl_status.setStyleSheet("font-weight: bold; color: green;")
+        self.btn_start.setEnabled(False)
+        self.btn_load.setEnabled(False)
+        self.btn_stop.setEnabled(True)
         self.btn_pause.setEnabled(True)
         self.btn_resume.setEnabled(False)
 
