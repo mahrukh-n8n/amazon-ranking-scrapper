@@ -1,5 +1,9 @@
 import asyncio
 import logging
+import re
+import os
+from datetime import datetime
+import pandas as pd
 from PyQt6.QtCore import QObject, pyqtSignal
 from src.browser_manager import BrowserManager
 from src.scraper import AmazonScraper
@@ -26,6 +30,7 @@ class ScraperController(QObject):
         self.pause_event = asyncio.Event()
         self.pause_event.set()  # Not paused initially
         self.current_marketplace = None  # Track current marketplace for navigation
+        self.all_results = []
 
     def set_tasks(self, tasks: list):
         """Sets the list of tasks to process."""
@@ -69,6 +74,7 @@ class ScraperController(QObject):
         self.should_stop = False
         self.pause_event.set()  # Ensure not paused at start
         self.current_marketplace = None  # Reset marketplace tracking
+        self.all_results = []
 
         logger.info(f"Starting job with {len(self.tasks)} tasks...")
 
@@ -87,7 +93,10 @@ class ScraperController(QObject):
                 self.task_started.emit(i + 1, len(self.tasks))
 
                 task_marketplace = task.get('marketplace', 'amazon.com')
-                logger.info(f"Processing Task {i+1}/{len(self.tasks)}: {task['keyword']} (ASIN: {task['asin']}) in {task['zip_code']} on {task_marketplace}")
+                # Split ASINs if multiple are provided (comma, space, tab, newline separated)
+                asins = [a.strip() for a in re.split(r'[,\s\t\n]+', task['asin']) if a.strip()]
+
+                logger.info(f"Processing Task {i+1}/{len(self.tasks)}: {task['keyword']} (ASINs: {', '.join(asins)}) in {task['zip_code']} on {task_marketplace}")
 
                 # Navigate to marketplace if changed or first task
                 if self.current_marketplace != task_marketplace:
@@ -115,15 +124,29 @@ class ScraperController(QObject):
                         await self.pause_event.wait()  # Blocks if paused
                         if self.check_stop(): break
 
-                        # 3. Find ASIN
-                        result = await self.scraper.find_asin_rank(task['asin'])
+                        # 3. Find ASINs
+                        results = await self.scraper.find_asins_ranks(asins)
 
                         await self.pause_event.wait()  # Blocks if paused
 
-                        if result['found']:
-                            logger.info(f"Result: Found at Rank {result['rank']}")
-                        else:
-                            logger.info("Result: Not found")
+                        for res in results:
+                            # Add task metadata to results
+                            full_result = {
+                                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "Marketplace": task_marketplace,
+                                "Zip Code": task['zip_code'],
+                                "Keyword": task['keyword'],
+                                "ASIN": res['asin'],
+                                "Rank": res['rank'] if res['found'] else "N/A",
+                                "Found": res['found'],
+                                "Page": res['page']
+                            }
+                            self.all_results.append(full_result)
+
+                            if res['found']:
+                                logger.info(f"Result for {res['asin']}: Found at Rank {res['rank']}")
+                            else:
+                                logger.info(f"Result for {res['asin']}: Not found")
 
                         task_complete = True # Success
 
@@ -162,8 +185,30 @@ class ScraperController(QObject):
         return False
 
     async def cleanup(self):
-        """Cleans up resources."""
+        """Cleans up resources and saves results."""
+        if self.all_results:
+            self.save_results()
+
         if self.scraper:
             await self.scraper.close()
         self.scraper = None
         self.browser_manager = None
+
+    def save_results(self):
+        """Saves accumulated results to a CSV file."""
+        if not self.all_results:
+            return
+
+        try:
+            # Ensure results directory exists
+            os.makedirs("results", exist_ok=True)
+
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"results/results_{timestamp}.csv"
+
+            df = pd.DataFrame(self.all_results)
+            df.to_csv(filename, index=False)
+            logger.info(f"Results saved to {filename}")
+        except Exception as e:
+            logger.error(f"Failed to save results: {e}")

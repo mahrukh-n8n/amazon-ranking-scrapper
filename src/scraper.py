@@ -92,18 +92,12 @@ class AmazonScraper:
             logger.error("Failed to perform search. Search box not found or results not loaded.")
             raise
 
-    async def find_asin_rank(self, target_asin: str) -> dict:
+    async def find_asins_ranks(self, target_asins: list) -> list:
         """
-        Finds the rank of a specific ASIN in the current search results.
-        Returns a dict with 'rank', 'page', 'found', 'asin', 'keyword'.
+        Finds the ranks of multiple ASINs in the current search results.
+        Returns a list of dicts, each with 'rank', 'page', 'found', 'asin'.
         """
-        logger.info(f"Looking for ASIN: {target_asin}")
-
-        # Selector for organic search results (excluding sponsored if possible, or just all)
-        # data-component-type="s-search-result" is standard for organic and sponsored results mixed in the main list.
-        # Sponsored results often have class "AdHolder" or similar, but often users want to know visible rank including ads or organic rank.
-        # For now, let's count all results as "rank" on page, but we might want to filter sponsored later.
-        # The requirements just say "extract ranks".
+        logger.info(f"Looking for ASINs: {', '.join(target_asins)}")
 
         result_selector = 'div[data-component-type="s-search-result"]'
 
@@ -111,24 +105,30 @@ class AmazonScraper:
             await self.page.wait_for_selector(result_selector, timeout=10000)
         except PlaywrightTimeoutError:
              logger.warning("No search results found.")
-             return {"found": False, "rank": -1, "page": 1}
+             return [{"found": False, "rank": -1, "page": 1, "asin": asin} for asin in target_asins]
 
         results = await self.page.query_selector_all(result_selector)
 
+        found_results = {asin: {"found": False, "rank": -1, "page": 1, "asin": asin} for asin in target_asins}
+
         for index, result in enumerate(results):
             asin = await result.get_attribute("data-asin")
-            if asin == target_asin:
+            if asin in target_asins:
                 rank = index + 1
-                logger.info(f"Found ASIN {target_asin} at rank {rank} on page 1")
-                return {
+                logger.info(f"Found ASIN {asin} at rank {rank} on page 1")
+                found_results[asin] = {
                     "found": True,
                     "rank": rank,
                     "page": 1,
-                    "asin": target_asin
+                    "asin": asin
                 }
 
-        logger.info(f"ASIN {target_asin} not found on page 1")
-        return {"found": False, "rank": -1, "page": 1, "asin": target_asin}
+        # Check which ASINs were not found and log them
+        for asin, res in found_results.items():
+            if not res["found"]:
+                logger.info(f"ASIN {asin} not found on page 1")
+
+        return list(found_results.values())
 
     async def close(self):
         await self.browser_manager.close()
