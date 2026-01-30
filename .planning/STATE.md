@@ -2,7 +2,7 @@
 
 **Project:** Amazon Geo-Rank Scraper
 **Core Value:** Accurate Geo-Rank extraction validation.
-**Current Focus:** Phase 3 - Output & Integration
+**Current Focus:** Phase 4 - Scheduling & Automation
 
 ## Current Position
 
@@ -11,6 +11,8 @@
 | 1 - Core Geo-Scraper Engine | Scraper correctly simulates a localized user and extracts ranks. | ✓ Complete |
 | 2 - Interactive Desktop UI | User can manage the scraping session without touching code. | ✓ Complete |
 | 3 - Output & Integration | Usable data is delivered at the end of the session. | ✓ Complete |
+| **4 - Scheduling & Automation** | **Automate periodic runs without manual intervention.** | **In Progress** |
+
 
 ## Progress
 
@@ -18,7 +20,8 @@
 Phase 1: ██████████ 100%
 Phase 2: ██████████ 100%
 Phase 3: ██████████ 100%
-Overall: ██████████ 100%
+Phase 4: ░░░░░░░░░░ 0%
+Overall: ████████░░ 75%
 ```
 
 ## Phase 3 Completed
