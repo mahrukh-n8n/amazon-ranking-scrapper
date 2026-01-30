@@ -61,6 +61,17 @@ class MainWindow(QMainWindow):
         self.btn_resume.setEnabled(False)
         btn_layout.addWidget(self.btn_resume)
 
+        # Connect button signals
+        self.btn_pause.clicked.connect(self.on_pause_clicked)
+        self.btn_resume.clicked.connect(self.on_resume_clicked)
+
+        # Connect controller signals
+        self.controller.paused.connect(self.on_job_paused)
+        self.controller.resumed.connect(self.on_job_resumed)
+        self.controller.captcha_detected.connect(self.on_captcha_detected)
+        self.controller.task_started.connect(self.on_task_started)
+        self.controller.job_finished.connect(self.on_job_finished)
+
         layout.addLayout(btn_layout)
 
         # Status bar
@@ -130,19 +141,63 @@ class MainWindow(QMainWindow):
         self.btn_start.setEnabled(False)
         self.btn_load.setEnabled(False)
         self.btn_stop.setEnabled(True)
+        self.btn_pause.setEnabled(True)
+        self.btn_resume.setEnabled(False)
+        self.lbl_status.setText("Status: Running")
+        self.lbl_status.setStyleSheet("font-weight: bold; color: green;")
 
         try:
             await self.controller.start_job()
         finally:
-            # Restore state when job finishes or fails
-            self.btn_start.setEnabled(True)
-            self.btn_load.setEnabled(True)
-            self.btn_stop.setEnabled(False)
+            self.on_job_finished()
 
     def on_stop_clicked(self):
-
         """Handle Stop button click."""
         # This is synchronous because we just set a flag
         self.controller.stop_job()
         self.btn_stop.setEnabled(False)
+
+    def on_pause_clicked(self):
+        """Handle Pause button click."""
+        self.controller.pause_job()
+
+    def on_resume_clicked(self):
+        """Handle Resume button click."""
+        self.controller.resume_job()
+
+    def on_job_paused(self):
+        """Handle job paused signal from controller."""
+        self.lbl_status.setText("Status: Paused")
+        self.btn_pause.setEnabled(False)
+        self.btn_resume.setEnabled(True)
+
+    def on_job_resumed(self):
+        """Handle job resumed signal from controller."""
+        self.lbl_status.setText("Status: Running")
+        self.lbl_status.setStyleSheet("font-weight: bold; color: green;")
+        self.btn_pause.setEnabled(True)
+        self.btn_resume.setEnabled(False)
+
+    def on_captcha_detected(self):
+        """Handle captcha detected signal from controller."""
+        self.lbl_status.setText("Status: CAPTCHA - Solve and Resume")
+        self.lbl_status.setStyleSheet("font-weight: bold; color: red;")
+        self.btn_pause.setEnabled(False)
+        self.btn_resume.setEnabled(True)
+        self.alerter.play_alert()
+
+    def on_task_started(self, current: int, total: int):
+        """Handle task started signal from controller."""
+        self.lbl_progress.setText(f"Progress: {current}/{total}")
+
+    def on_job_finished(self):
+        """Handle job finished signal from controller."""
+        self.lbl_status.setText("Status: Idle")
+        self.lbl_status.setStyleSheet("font-weight: bold; color: black;")
+        self.lbl_progress.setText("Progress: 0/0")
+        self.btn_start.setEnabled(True)
+        self.btn_load.setEnabled(True)
+        self.btn_stop.setEnabled(False)
+        self.btn_pause.setEnabled(False)
+        self.btn_resume.setEnabled(False)
 
