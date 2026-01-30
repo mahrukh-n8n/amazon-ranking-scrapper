@@ -11,6 +11,8 @@ class ScraperController(QObject):
     captcha_detected = pyqtSignal()
     paused = pyqtSignal()
     resumed = pyqtSignal()
+    task_started = pyqtSignal(int, int)  # (current_task, total_tasks)
+    job_finished = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -82,6 +84,7 @@ class ScraperController(QObject):
             for i, task in enumerate(self.tasks):
                 if self.check_stop(): break
                 self.current_task_index = i
+                self.task_started.emit(i + 1, len(self.tasks))
 
                 logger.info(f"Processing Task {i+1}/{len(self.tasks)}: {task['keyword']} (ASIN: {task['asin']}) in {task['zip_code']}")
 
@@ -133,6 +136,7 @@ class ScraperController(QObject):
         finally:
             await self.cleanup()
             self.is_running = False
+            self.job_finished.emit()
             logger.info("Job finished or stopped.")
 
     def stop_job(self):
