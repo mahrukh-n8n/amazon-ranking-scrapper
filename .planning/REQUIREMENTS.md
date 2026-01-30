@@ -44,17 +44,22 @@ Deferred to future release.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCRAPE-01 | - | Pending |
-| SCRAPE-02 | - | Pending |
-| SCRAPE-03 | - | Pending |
-| SCRAPE-04 | - | Pending |
-| SCRAPE-05 | - | Pending |
-| DATA-01 | - | Pending |
-| DATA-02 | - | Pending |
-| DATA-03 | - | Pending |
-| UI-01 | - | Pending |
-| UI-02 | - | Pending |
-| UI-03 | - | Pending |
+| SCRAPE-01 | Phase 1 | Pending |
+| SCRAPE-02 | Phase 1 | Pending |
+| SCRAPE-03 | Phase 2 | Pending |
+| SCRAPE-04 | Phase 1 | Pending |
+| SCRAPE-05 | Phase 1 | Pending |
+| DATA-01 | Phase 2 | Pending |
+| DATA-02 | Phase 3 | Pending |
+| DATA-03 | Phase 3 | Pending |
+| UI-01 | Phase 2 | Pending |
+| UI-02 | Phase 2 | Pending |
+| UI-03 | Phase 3 | Pending |
 
 ---
 *Requirements defined: 2026-01-30*
+*Traceability updated: 2026-01-30*
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>
