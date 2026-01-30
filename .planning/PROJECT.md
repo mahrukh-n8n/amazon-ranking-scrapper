@@ -8,7 +8,27 @@ A Python-based desktop GUI application that accurately checks Amazon product ran
 
 Accurate Geo-Rank extraction validation. The system must verify the Amazon delivery location is correctly set to the target Zip Code before recording any ranking data.
 
+## Current State (v1.0 MVP)
+
+**Shipped:** 2026-01-30
+**Capabilities:**
+- Playwright-based scraper with US/UK zip code injection
+- PyQt6 Desktop GUI with real-time logs and job control
+- Auto-pause on Captcha detection with sound alerts
+- CSV export with Sequential, Organic, and Sponsored ranks
+- Daily/Weekly scheduling and system tray background mode
+- Settings persistence and session cookie reuse
+
+## Next Milestone Goals
+
+**v2.0 Focus:** Enhanced Data & Visualization
+- Screenshot evidence capture for rank verification
+- Historical rank tracking dashboard
+- Proxy rotation integration
+- Expanded marketplace support (DE, FR, ES, IT)
+
 ## Requirements
+
 
 ### Validated
 
