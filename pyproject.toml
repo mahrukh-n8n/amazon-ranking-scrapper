@@ -1,0 +1,24 @@
+[project]
+name = "amz-geo-rank-scraper"
+version = "0.1.0"
+description = "Amazon Geo-Rank Scraper"
+authors = [
+    {name = "Antigravity",email = "noreply@anthropic.com"}
+]
+readme = "README.md"
+requires-python = "^3.11"
+dependencies = [
+    "playwright (>=1.57.0,<2.0.0)",
+    "pytest (>=9.0.2,<10.0.0)",
+    "pytest-playwright (>=0.7.2,<0.8.0)",
+    "pytest-asyncio (>=1.3.0,<2.0.0)",
+    "pyqt6 (>=6.10.2,<7.0.0)",
+    "qasync (>=0.28.0,<0.29.0)",
+    "pandas (>=3.0.0,<4.0.0)",
+    "openpyxl (>=3.1.5,<4.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

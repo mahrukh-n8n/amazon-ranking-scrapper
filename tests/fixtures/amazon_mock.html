@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Amazon.com. Spend less. Smile more.</title>
+</head>
+<body>
+    <!-- Top Nav Location Widget -->
+    <div id="nav-global-location-popover-link">
+        <span id="glow-ingress-line2">Deliver to Philippines</span>
+    </div>
+
+    <!-- The Popover (initially hidden usually, but for mock we can just have it there or show it on click) -->
+    <!-- In a real scenario, clicking the link opens a modal. We can simulate this with simple JS or just have the elements present.
+         For this unit test, let's assume the click works and just test that we can interact with the inputs if they are visible.
+    -->
+    <div id="a-popover-content">
+        <input type="text" id="GLUXZipUpdateInput" value="">
+        <span id="GLUXZipUpdate" role="button">Apply</span>
+        <div id="GLUXZipError" style="display:none;"></div>
+        <button name="glowDoneButton" style="display:none;">Done</button>
+    </div>
+
+    <script>
+        // Simple mock behavior
+        document.getElementById('nav-global-location-popover-link').addEventListener('click', function() {
+            console.log("Popover clicked");
+        });
+
+        document.getElementById('GLUXZipUpdate').addEventListener('click', function() {
+            const zip = document.getElementById('GLUXZipUpdateInput').value;
+            if (zip === '10001') {
+                // Success case
+                document.getElementById('glow-ingress-line2').innerText = 'Deliver to New York 10001';
+                document.querySelector('button[name="glowDoneButton"]').style.display = 'block';
+            } else {
+                // Error case
+                document.getElementById('GLUXZipError').style.display = 'block';
+                document.getElementById('GLUXZipError').innerText = 'Please enter a valid US zip code';
+            }
+        });
+
+        document.querySelector('button[name="glowDoneButton"]').addEventListener('click', function() {
+             // Close modal behavior
+        });
+    </script>
+</body>
+</html>
