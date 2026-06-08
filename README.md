@@ -45,7 +45,7 @@ poetry run python main_rank_cli.py --input scrapper_test_job.csv
 Run detail page scraper for one ASIN:
 
 ```powershell
-poetry run python main_detail_page.py --marketplace amazon.co.uk --zip-code "SW1A 1AA" --asin B0CQLWJ6X3
+poetry run python main_detail_page.py --marketplace amazon.co.uk --zip-code "SW1A 1AA" --asin B0BMGYWVSH
 ```
 
 ## Ranking scraper
@@ -58,8 +58,8 @@ CSV or Excel files must contain:
 
 ```csv
 Marketplace,Zip Code,ASIN,Keyword
-amazon.com,10001,B08N5WRWNW,wireless mouse
-amazon.co.uk,SW1A 1AA,"B092T8N7T3,B0CQLWJ6X3","velcro cable ties,cable organizer"
+amazon.com,10001,B0BNTMF4H8,wireless mouse
+amazon.co.uk,SW1A 1AA,"B0CPKTKLDN,B0BMGYWVSH","velcro cable ties,cable organizer"
 ```
 
 Column meanings:
@@ -80,7 +80,7 @@ poetry run python main_rank_cli.py --input jobs.csv
 Single task mode:
 
 ```powershell
-poetry run python main_rank_cli.py --marketplace amazon.com --zip-code 10001 --asin B08N5WRWNW --keyword "wireless mouse"
+poetry run python main_rank_cli.py --marketplace amazon.com --zip-code 10001 --asin B0BNTMF4H8 --keyword "wireless mouse"
 ```
 
 Useful options:
@@ -133,13 +133,13 @@ The detail page scraper opens a product detail page after setting marketplace an
 Single ASIN:
 
 ```powershell
-poetry run python main_detail_page.py --marketplace amazon.co.uk --zip-code "SW1A 1AA" --asin B0CQLWJ6X3
+poetry run python main_detail_page.py --marketplace amazon.co.uk --zip-code "SW1A 1AA" --asin B0BMGYWVSH
 ```
 
 Single URL:
 
 ```powershell
-poetry run python main_detail_page.py --marketplace amazon.co.uk --zip-code "SW1A 1AA" --url "https://www.amazon.co.uk/dp/B0CQLWJ6X3"
+poetry run python main_detail_page.py --marketplace amazon.co.uk --zip-code "SW1A 1AA" --url "https://www.amazon.co.uk/dp/B0BMGYWVSH"
 ```
 
 Batch mode:
@@ -154,14 +154,14 @@ CSV or Excel files must contain `Marketplace`, `Zip Code`, and either `ASIN` or 
 
 ```csv
 Marketplace,Zip Code,ASIN
-amazon.co.uk,SW1A 1AA,B0CQLWJ6X3
+amazon.co.uk,SW1A 1AA,B0BMGYWVSH
 ```
 
 or:
 
 ```csv
 Marketplace,Zip Code,Product URL
-amazon.co.uk,SW1A 1AA,https://www.amazon.co.uk/dp/B0CQLWJ6X3
+amazon.co.uk,SW1A 1AA,https://www.amazon.co.uk/dp/B0BMGYWVSH
 ```
 
 ### Detail page output
@@ -301,3 +301,5 @@ Amazon may use account, browser, or region currency preferences from the persist
 ## Responsible use
 
 Use this tool responsibly and in accordance with Amazon's terms and applicable laws. Prefer low-frequency checks, headed mode for manual review, and your own products or authorized research workflows.
+
+

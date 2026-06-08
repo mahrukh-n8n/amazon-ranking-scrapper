@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -355,6 +356,8 @@ class AmazonDetailScraper:
             "#fast-track-message",
         ])
         availability = await self._first_text(["#availability"])
+        if not availability:
+            availability = await self._extract_buybox_availability_prompt()
         delivery_location = await self._first_text([
             "#contextualIngressPtLabel_deliveryShortLine",
             "#glow-ingress-line2",
@@ -375,6 +378,10 @@ class AmazonDetailScraper:
         delivery_text = self._clean_text(delivery_text)
         if not delivery_text:
             return ""
+
+        date_candidates = self._extract_delivery_date_candidates(delivery_text)
+        if date_candidates:
+            return sorted(date_candidates, key=lambda item: item["sort"])[0]["text"]
 
         patterns = [
             r"(?:fastest delivery|arrives|get it|delivery)\s+((?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:,\s*)?\s+\d{1,2}\s+\w+)",
@@ -403,6 +410,76 @@ class AmazonDetailScraper:
             flags=re.IGNORECASE,
         )
         return self._clean_text(sentence_match.group(1)).rstrip(".") if sentence_match else delivery_text
+
+    def _extract_delivery_date_candidates(self, delivery_text: str) -> List[Dict[str, Any]]:
+        month_names = {
+            "jan": 1, "january": 1,
+            "feb": 2, "february": 2,
+            "mar": 3, "march": 3,
+            "apr": 4, "april": 4,
+            "may": 5,
+            "jun": 6, "june": 6,
+            "jul": 7, "july": 7,
+            "aug": 8, "august": 8,
+            "sep": 9, "sept": 9, "september": 9,
+            "oct": 10, "october": 10,
+            "nov": 11, "november": 11,
+            "dec": 12, "december": 12,
+        }
+        weekdays = r"monday|tuesday|wednesday|thursday|friday|saturday|sunday"
+        candidates = []
+        now = datetime.now()
+
+        relative_patterns = [
+            (r"\b(today)(?:\s+by\s+[^.]+)?", 0),
+            (r"\b(tomorrow)(?:\s+by\s+[^.]+)?", 1),
+        ]
+        for pattern, offset in relative_patterns:
+            for match in re.finditer(pattern, delivery_text, flags=re.IGNORECASE):
+                candidates.append({"text": self._clean_text(match.group(0)).rstrip("."), "sort": offset})
+
+        month_day_pattern = re.compile(
+            rf"\b((?:{weekdays}),?\s+(?:(?P<month1>[A-Za-z]+)\s+(?P<day1>\d{{1,2}})|(?P<day2>\d{{1,2}})\s+(?P<month2>[A-Za-z]+)))\b",
+            flags=re.IGNORECASE,
+        )
+        for match in month_day_pattern.finditer(delivery_text):
+            month_text = (match.group("month1") or match.group("month2") or "").lower()
+            day_text = match.group("day1") or match.group("day2")
+            month = month_names.get(month_text)
+            if not month or not day_text:
+                continue
+            day = int(day_text)
+            sort_date = datetime(now.year, month, day)
+            if sort_date.date() < now.date():
+                sort_date = datetime(now.year + 1, month, day)
+            candidates.append({"text": self._clean_text(match.group(1)).rstrip("."), "sort": (sort_date - now).days + 2})
+
+        return candidates
+
+    async def _extract_buybox_availability_prompt(self) -> str:
+        try:
+            return await self.page.evaluate(
+                """() => {
+                    const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
+                    const buyboxText = clean(document.querySelector('#buybox, #desktop_buybox')?.innerText || '');
+                    const prompts = [
+                        /To buy, select [^.]+?(?= Add to|$)/i,
+                        /Choose from options [^.]+?(?= Add to|$)/i,
+                        /No featured offers available/i,
+                        /Currently unavailable/i,
+                        /Temporarily out of stock/i,
+                    ];
+                    for (const pattern of prompts) {
+                        const match = buyboxText.match(pattern);
+                        if (match) return clean(match[0]);
+                    }
+                    const center = clean(document.querySelector('#centerCol')?.innerText || '');
+                    const stock = center.match(/\\bIn Stock\\b|\\bIn stock\\b|\\bAuf Lager\\b|\\bEn stock\\b/i);
+                    return stock ? stock[0] : '';
+                }"""
+            )
+        except Exception:
+            return ""
 
     async def _extract_reviews_summary(self) -> str:
         summary = await self._first_text([
