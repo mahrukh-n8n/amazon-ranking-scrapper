@@ -100,6 +100,21 @@ class AmazonDetailScraper:
             "Primary BSR Rank": details.get("primary_bsr_rank", ""),
             "Primary BSR Category": details.get("primary_bsr_category", ""),
             "All BSR Ranks": json.dumps(details.get("all_bsr_ranks", []), ensure_ascii=False),
+            "Availability": details.get("availability", ""),
+            "Delivery": details.get("delivery_text", ""),
+            "Delivery Location": details.get("delivery_location", ""),
+            "Dispatches From": details.get("dispatches_from", ""),
+            "Bullet Points": json.dumps(details.get("bullet_points", []), ensure_ascii=False),
+            "Attributes": json.dumps(details.get("attributes", {}), ensure_ascii=False),
+            "Description": details.get("description", ""),
+            "A Plus Description": details.get("aplus_description", ""),
+            "Product Information": json.dumps(details.get("product_information", {}), ensure_ascii=False),
+            "Reviews Summary": details.get("reviews_summary", ""),
+            "Rating Breakdown": json.dumps(details.get("rating_breakdown", {}), ensure_ascii=False),
+            "Reviews": json.dumps(details.get("reviews", []), ensure_ascii=False),
+            "Breadcrumbs": json.dumps(details.get("breadcrumbs", []), ensure_ascii=False),
+            "Main Image": details.get("main_image", ""),
+            "Image URLs": json.dumps(details.get("image_urls", []), ensure_ascii=False),
         }
 
     async def extract_details(self) -> Dict[str, Any]:
@@ -115,6 +130,8 @@ class AmazonDetailScraper:
         rating = await self._extract_rating()
         number_of_reviews = await self._extract_review_count()
         bsr_ranks = await self._extract_bsr_ranks()
+        delivery = await self._extract_delivery()
+        images = await self._extract_images()
 
         primary_bsr = bsr_ranks[0] if bsr_ranks else {}
 
@@ -128,6 +145,21 @@ class AmazonDetailScraper:
             "primary_bsr_rank": primary_bsr.get("rank", ""),
             "primary_bsr_category": primary_bsr.get("category", ""),
             "all_bsr_ranks": bsr_ranks,
+            "availability": delivery.get("availability", ""),
+            "delivery_text": delivery.get("delivery_text", ""),
+            "delivery_location": delivery.get("delivery_location", ""),
+            "dispatches_from": delivery.get("dispatches_from", ""),
+            "bullet_points": await self._extract_bullet_points(),
+            "attributes": await self._extract_attributes(),
+            "description": await self._extract_description(),
+            "aplus_description": await self._extract_aplus_description(),
+            "product_information": await self._extract_product_information(),
+            "reviews_summary": await self._extract_reviews_summary(),
+            "rating_breakdown": await self._extract_rating_breakdown(),
+            "reviews": await self._extract_reviews(),
+            "breadcrumbs": await self._extract_breadcrumbs(),
+            "main_image": images.get("main_image", ""),
+            "image_urls": images.get("image_urls", []),
         }
 
     async def _wait_for_product_shell(self):
@@ -261,6 +293,312 @@ class AmazonDetailScraper:
 
         combined = "\n".join(texts)
         return self._parse_bsr_text(combined)
+
+    async def _extract_bullet_points(self) -> List[str]:
+        try:
+            return await self.page.evaluate(
+                """() => {
+                    const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
+                    return Array.from(document.querySelectorAll('#feature-bullets li'))
+                        .map(li => clean(li.innerText))
+                        .filter(text => text && !/^see more/i.test(text) && !/^report an issue/i.test(text));
+                }"""
+            )
+        except Exception:
+            return []
+
+    async def _extract_attributes(self) -> Dict[str, str]:
+        rows = await self._extract_key_value_rows([
+            "#productOverview_feature_div tr",
+            "#productFactsDesktop_feature_div tr",
+            "#poExpander tr",
+        ])
+        return self._rows_to_dict(rows)
+
+    async def _extract_description(self) -> str:
+        return await self._first_text([
+            "#productDescription",
+            "#bookDescription_feature_div",
+            "#productDescription_feature_div",
+        ])
+
+    async def _extract_aplus_description(self) -> str:
+        return await self._first_text([
+            "#aplus",
+            "#aplus_feature_div",
+            "#dpx-aplus-product-description_feature_div",
+        ])
+
+    async def _extract_product_information(self) -> Dict[str, Any]:
+        rows = await self._extract_key_value_rows([
+            "#prodDetails tr",
+            "#productDetails_expanderSectionTables tr",
+            "#productDetails_detailBullets_sections1 tr",
+            "#productDetails_techSpec_section_1 tr",
+            "#productDetails_techSpec_section_2 tr",
+        ])
+
+        info = self._rows_to_dict(rows)
+
+        bullet_info = await self._extract_detail_bullet_rows()
+        for key, value in bullet_info.items():
+            info.setdefault(key, value)
+
+        return info
+
+    async def _extract_delivery(self) -> Dict[str, str]:
+        full_delivery_text = await self._first_text([
+            "#mir-layout-DELIVERY_BLOCK",
+            "#deliveryBlockMessage",
+            "#deliveryBlock_feature_div",
+            "#ddmDeliveryMessage",
+            "#fast-track-message",
+        ])
+        availability = await self._first_text(["#availability"])
+        delivery_location = await self._first_text([
+            "#contextualIngressPtLabel_deliveryShortLine",
+            "#glow-ingress-line2",
+        ])
+        dispatches_from = await self._buybox_label_value([
+            "Dispatches from",
+            "Ships from",
+        ])
+
+        return {
+            "delivery_text": self._extract_earliest_delivery_text(full_delivery_text),
+            "availability": availability,
+            "delivery_location": delivery_location,
+            "dispatches_from": dispatches_from,
+        }
+
+    def _extract_earliest_delivery_text(self, delivery_text: str) -> str:
+        delivery_text = self._clean_text(delivery_text)
+        if not delivery_text:
+            return ""
+
+        patterns = [
+            r"(?:fastest delivery|arrives|get it|delivery)\s+((?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:,\s*)?\s+\d{1,2}\s+\w+)",
+            r"(?:fastest delivery|arrives|get it|delivery)\s+((?:today|tomorrow)(?:\s+by\s+[^.]+)?)",
+        ]
+
+        matches = []
+        for pattern in patterns:
+            for match in re.finditer(pattern, delivery_text, flags=re.IGNORECASE):
+                value = self._clean_text(match.group(1)).rstrip(".")
+                if value:
+                    matches.append(value)
+
+        if matches:
+            for match in matches:
+                if match.lower().startswith("today"):
+                    return match
+            for match in matches:
+                if match.lower().startswith("tomorrow"):
+                    return match
+            return matches[0]
+
+        sentence_match = re.search(
+            r"((?:FREE\s+)?delivery\s+[^.]+|(?:Or\s+)?fastest delivery\s+[^.]+|Arrives\s+[^.]+)",
+            delivery_text,
+            flags=re.IGNORECASE,
+        )
+        return self._clean_text(sentence_match.group(1)).rstrip(".") if sentence_match else delivery_text
+
+    async def _extract_reviews_summary(self) -> str:
+        summary = await self._first_text([
+            "#cr-product-insights-cards",
+            "#reviewsMedley .reviewFeatureText",
+            "#reviewsMedley [data-hook='cr-insights-widget-aspects']",
+        ])
+        if summary:
+            return summary
+
+        try:
+            return await self.page.evaluate(
+                """() => {
+                    const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
+                    const text = clean(document.querySelector('#reviewsMedley')?.innerText || '');
+                    const start = text.indexOf('Customers say');
+                    if (start < 0) return '';
+                    const endMarkers = ['AI Generated', 'Reviews with images', 'Top reviews'];
+                    let end = text.length;
+                    for (const marker of endMarkers) {
+                        const markerIndex = text.indexOf(marker, start);
+                        if (markerIndex > start && markerIndex < end) end = markerIndex;
+                    }
+                    return clean(text.slice(start, end));
+                }"""
+            )
+        except Exception:
+            return ""
+
+    async def _extract_rating_breakdown(self) -> Dict[str, str]:
+        try:
+            return await self.page.evaluate(
+                """() => {
+                    const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
+                    const result = {};
+                    for (const row of document.querySelectorAll('#histogramTable tr, [aria-label*="star"]')) {
+                        const text = clean(row.innerText || row.getAttribute('aria-label') || '');
+                        const match = text.match(/(5|4|3|2|1)\\s*star.*?([0-9]+%)/i) || text.match(/([0-9]+%).*?(5|4|3|2|1)\\s*star/i);
+                        if (match) {
+                            const star = match[1].includes('%') ? match[2] : match[1];
+                            const pct = match[1].includes('%') ? match[1] : match[2];
+                            result[`${star} star`] = pct;
+                        }
+                    }
+                    return result;
+                }"""
+            )
+        except Exception:
+            return {}
+
+    async def _extract_reviews(self, limit: int = 20) -> List[Dict[str, str]]:
+        try:
+            return await self.page.evaluate(
+                """limit => {
+                    const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
+                    const firstText = (root, selectors) => {
+                        for (const selector of selectors) {
+                            const el = root.querySelector(selector);
+                            const text = clean(el && el.innerText);
+                            if (text) return text;
+                        }
+                        return '';
+                    };
+                    return Array.from(document.querySelectorAll('[data-hook="review"]')).slice(0, limit).map(review => ({
+                        id: review.id || '',
+                        author: firstText(review, ['.a-profile-name']),
+                        rating: firstText(review, ['[data-hook="review-star-rating"] .a-icon-alt', '[data-hook="cmps-review-star-rating"] .a-icon-alt', '.review-rating .a-icon-alt']),
+                        title: firstText(review, ['[data-hook="review-title"]', '[data-hook="reviewTitle"]']),
+                        date: firstText(review, ['[data-hook="review-date"]']),
+                        variant: firstText(review, ['[data-hook="format-strip"]']),
+                        verified_purchase: Boolean(review.querySelector('[data-hook="avp-badge"]')),
+                        body: firstText(review, ['[data-hook="review-body"]', '[data-hook="reviewText"]', '[data-hook="reviewTextContainer"]']),
+                        helpful: firstText(review, ['[data-hook="helpful-vote-statement"]', '[data-hook="helpfulVoteWidget"]']),
+                    }));
+                }""",
+                limit,
+            )
+        except Exception:
+            return []
+
+    async def _extract_breadcrumbs(self) -> List[str]:
+        try:
+            return await self.page.evaluate(
+                """() => {
+                    const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
+                    return Array.from(document.querySelectorAll('#wayfinding-breadcrumbs_feature_div li, #wayfinding-breadcrumbs_container li'))
+                        .map(li => clean(li.innerText).replace(/^›\\s*/, ''))
+                        .filter(Boolean);
+                }"""
+            )
+        except Exception:
+            return []
+
+    async def _extract_images(self) -> Dict[str, Any]:
+        try:
+            return await self.page.evaluate(
+                """() => {
+                    const urls = new Set();
+                    const add = value => {
+                        if (value && /^https?:\\/\\//.test(value)) urls.add(value);
+                    };
+                    const landing = document.querySelector('#landingImage, #imgBlkFront');
+                    add(landing && (landing.getAttribute('data-old-hires') || landing.src));
+                    for (const img of document.querySelectorAll('#altImages img, #imageBlock img, #main-image-container img')) {
+                        add(img.getAttribute('data-old-hires') || img.src);
+                    }
+                    return {
+                        main_image: landing ? (landing.getAttribute('data-old-hires') || landing.src || '') : '',
+                        image_urls: Array.from(urls),
+                    };
+                }"""
+            )
+        except Exception:
+            return {"main_image": "", "image_urls": []}
+
+    async def _extract_key_value_rows(self, row_selectors: List[str]) -> List[Dict[str, str]]:
+        try:
+            return await self.page.evaluate(
+                """selectors => {
+                    const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
+                    const visibleText = el => {
+                        if (!el) return '';
+                        const clone = el.cloneNode(true);
+                        for (const bad of clone.querySelectorAll('script, style, noscript')) bad.remove();
+                        return clean(clone.innerText || clone.textContent || '');
+                    };
+                    const rows = [];
+                    const seen = new Set();
+                    for (const selector of selectors) {
+                        for (const row of document.querySelectorAll(selector)) {
+                            const cells = Array.from(row.querySelectorAll('th, td'));
+                            if (cells.length < 2) continue;
+                            const key = visibleText(cells[0]).replace(/:$/, '');
+                            const value = visibleText(cells.slice(1).find(cell => visibleText(cell)) || cells[1]);
+                            if (!key || !value) continue;
+                            const fingerprint = `${key}\\t${value}`;
+                            if (seen.has(fingerprint)) continue;
+                            seen.add(fingerprint);
+                            rows.push({key, value});
+                        }
+                    }
+                    return rows;
+                }""",
+                row_selectors,
+            )
+        except Exception:
+            return []
+
+    async def _extract_detail_bullet_rows(self) -> Dict[str, str]:
+        try:
+            return await self.page.evaluate(
+                """() => {
+                    const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
+                    const result = {};
+                    for (const li of document.querySelectorAll('#detailBullets_feature_div li, #detailBulletsWrapper_feature_div li')) {
+                        const bold = clean(li.querySelector('.a-text-bold') && li.querySelector('.a-text-bold').innerText).replace(/:$/, '');
+                        const full = clean(li.innerText);
+                        if (!bold || !full) continue;
+                        const value = clean(full.replace(bold, '').replace(/^:/, ''));
+                        if (value) result[bold] = value;
+                    }
+                    return result;
+                }"""
+            )
+        except Exception:
+            return {}
+
+    async def _buybox_label_value(self, labels: List[str]) -> str:
+        try:
+            return await self.page.evaluate(
+                """labels => {
+                    const clean = value => (value || '').replace(/\\s+/g, ' ').trim();
+                    const wanted = labels.map(label => label.toLowerCase());
+                    const buybox = document.querySelector('#buybox, #desktop_buybox, #tabular-buybox');
+                    if (!buybox) return '';
+                    const text = clean(buybox.innerText);
+                    for (const label of wanted) {
+                        const regex = new RegExp(label.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '\\\\s+([^\\n]+?)(?=\\\\s+(Sold by|Returns|Payment|Packaging|Add to|Buy Now|Quantity|$))', 'i');
+                        const match = text.match(regex);
+                        if (match) return clean(match[1]);
+                    }
+                    return '';
+                }""",
+                labels,
+            )
+        except Exception:
+            return ""
+
+    def _rows_to_dict(self, rows: List[Dict[str, str]]) -> Dict[str, str]:
+        result = {}
+        for row in rows:
+            key = self._clean_text(row.get("key", "")).strip(":")
+            value = self._clean_text(row.get("value", ""))
+            if key and value:
+                result[key] = value
+        return result
 
     def _parse_bsr_text(self, text: str) -> List[Dict[str, str]]:
         if not text:

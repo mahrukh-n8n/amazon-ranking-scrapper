@@ -1,401 +1,303 @@
-# Amazon Geo-Rank Scraper
+﻿# Amazon Ranking and Detail Page Scraper
 
-A Python desktop application that checks Amazon product rankings from specific geographic locations. It automates browser interaction to set delivery zip codes before scraping, ensuring rank data reflects what real customers see in those regions.
+Amazon browser automation toolkit for geo-specific ranking checks and product detail page extraction. It uses Playwright with a persistent browser profile so Amazon cookies, location settings, and manual captcha recovery can be reused between runs.
 
-**Version:** 1.0.0
-**Developed by:** [Consologist.com](https://consologist.com) - Amazon Services Agency
+Developed by Consologist.com.
 
----
+## What this project does
 
-## Features
-
-### Core Scraping
-- **Geo-Location Simulation** - Set any US/UK zip/postal code to check rankings from that location
-- **Multi-ASIN Support** - Check multiple product ASINs in a single job
-- **Keyword Search** - Find where your products rank for specific search terms
-- **Three Rank Types**:
-  - **Sequential Rank** - Position counting all items (sponsored + organic)
-  - **Organic Rank** - Position among non-sponsored products only
-  - **Sponsored Rank** - Position among sponsored/ad products only
-- **Sponsored Detection** - Identifies if your product appears as a paid ad
-- **Session Persistence** - Reuses cookies to avoid repeated location setting
-
-### User Interface
-- **Desktop GUI** - Easy-to-use PyQt6 interface
-- **Real-time Logging** - See exactly what the scraper is doing
-- **Start/Pause/Stop Controls** - Full control over scraping jobs
-- **Progress Tracking** - Visual feedback on job completion
-- **Status Indicators** - Color-coded status (Idle, Running, Paused, Captcha)
-
-### Captcha Handling
-- **Auto-Detection** - Recognizes when Amazon shows a captcha
-- **Sound Alert** - Plays Windows notification sound when human intervention needed
-- **Window Focus** - Brings app to foreground and flashes taskbar
-- **Pause & Resume** - Automatically pauses, waits for you to solve, then continues
-
-### Scheduling & Automation
-- **Scheduled Runs** - Set daily or weekly scraping schedules
-- **System Tray** - Minimize to tray for background operation
-- **Tray Notifications** - Get notified when scheduled jobs start/complete
-- **Settings Persistence** - All preferences saved between sessions
-
-### Data Export
-- **CSV Export** - Automatic timestamped CSV files in `results/` folder
-- **Webhook Integration** - Optional HTTP POST to external services (n8n, Zapier, etc.)
-- **Desktop Notifications** - Alert when jobs complete
+- Checks Amazon search rankings for one or more ASINs from a selected marketplace and postal code.
+- Separates ranking into sequential, organic, and sponsored positions.
+- Scrapes Amazon product detail pages with price, seller, brand, reviews, BSR, product information, bullets, delivery date, and images.
+- Runs either from the desktop GUI or from command line scripts.
+- Saves timestamped CSV files under `results/`.
+- Supports optional webhook POST for ranking CLI results.
 
 ## Requirements
 
 - Windows 10/11
-- Python 3.11 or higher
-- Internet connection
+- Python 3.11 or newer
+- Poetry
+- Playwright Chromium browser
+- Internet access
 
-## Installation
+Install dependencies:
 
-### Quick Install (Recommended)
-
-1. Double-click `install.bat`
-2. Wait for installation to complete (downloads ~150MB for browser)
-3. Double-click `run.bat` to start the application
-
-### Manual Install
-
-```bash
-# Install Poetry (if not installed)
-curl -sSL https://install.python-poetry.org | python -
-
-# Install dependencies
+```powershell
 poetry install
-
-# Install Playwright browsers
 poetry run playwright install chromium
+```
 
-# Run the application
+## Quick start
+
+Run the GUI:
+
+```powershell
 poetry run python main_ui.py
 ```
 
-### First Run
+Run ranking scraper from CSV:
 
-On first run, the application will:
-1. Open a Chromium browser window
-2. Navigate to Amazon
-3. You may need to accept cookies or dismiss popups manually the first time
+```powershell
+poetry run python main_rank_cli.py --input scrapper_test_job.csv
+```
 
-## Usage
+Run detail page scraper for one ASIN:
 
-### 1. Prepare a Job File
+```powershell
+poetry run python main_detail_page.py --marketplace amazon.co.uk --zip-code "SW1A 1AA" --asin B0CQLWJ6X3
+```
 
-Create a CSV or Excel file with the following columns:
+## Ranking scraper
 
-| Marketplace | Zip Code | ASIN | Keyword |
-|-------------|----------|------|---------|
-| amazon.com | 10001 | B08N5WRWNW | wireless mouse |
-| amazon.co.uk | SW1A 1AA | B092T8N7T3,B0CQLWJ6X3 | velcro cable ties,cable organizer |
-| amazon.de | 10115 | B09XYZ1234 | kabellose maus,wireless maus |
+The ranking scraper sets the delivery location, searches a keyword, and checks where target ASINs appear on page 1.
 
-**Column Details:**
-- **Marketplace**: Amazon domain (`amazon.com`, `amazon.co.uk`, `amazon.de`, etc.)
-- **Zip Code**: US zip code (10001) or UK/EU postal code (SW1A 1AA, 10115)
-- **ASIN**: Single ASIN or comma-separated list for multiple products
-- **Keyword**: Single keyword or comma-separated list for multiple keywords
+### Ranking input file
 
-**Multiple Values:**
-- **ASINs**: Separate with commas, spaces, or newlines: `B08N5WRWNW,B09XYZ1234` or `B08N5WRWNW B09XYZ1234`
-- **Keywords**: Separate with commas or newlines only (keywords can contain spaces): `wireless mouse,gaming mouse,bluetooth mouse`
-
-Each keyword will be searched separately and all ASINs checked for each keyword.
-
-See `test_job.csv` for an example.
-
-### 2. Load and Run
-
-1. Click **Load Job File** and select your CSV/Excel file
-2. Verify the task count shows correctly
-3. Click **Start** to begin scraping
-4. Watch the real-time log for progress
-5. If a captcha appears:
-   - The app will pause and play a sound
-   - Solve the captcha in the browser window
-   - Click **Resume** to continue
-6. Results are saved automatically to `results/` folder when complete
-
-### 3. Configure Options
-
-| Option | Description |
-|--------|-------------|
-| **Webhook URL** | URL to POST results as JSON (optional) |
-| **Enable Webhook** | Toggle webhook integration on/off |
-| **Enable Notifications** | Toggle desktop alerts on completion |
-| **Minimize to Tray** | App stays in system tray when closed |
-| **Headless Mode** | Run browser invisibly (faster, but can't solve captchas) |
-| **Schedule Enabled** | Enable automatic scheduled runs |
-| **Recurrence** | Daily or Weekly (Mondays) |
-| **Time** | What time to run the scheduled job |
-
-### Headless Mode
-
-When enabled, the browser runs invisibly in the background. This is:
-- **Faster** - No rendering overhead
-- **Less resource intensive** - Uses less CPU/memory
-
-However, headless mode has limitations:
-- **Cannot solve captchas** - You won't see captchas when they appear
-- **No visual verification** - You can't see what the scraper is doing
-- **Higher detection risk** - Some anti-bot systems detect headless browsers
-
-**Recommendation:** Use headed mode (default) for interactive sessions and when captchas are expected. Use headless mode only for scheduled background runs on sites with low captcha frequency.
-
-## Output
-
-Results are saved as timestamped CSV files in the `results/` folder.
-
-### Output Columns
-
-| Column | Description |
-|--------|-------------|
-| Timestamp | When the check was performed |
-| Marketplace | Amazon domain used |
-| Zip Code | Location simulated |
-| Keyword | Search term |
-| ASIN | Product identifier |
-| Found | Whether product was found (True/False) |
-| Sequential Rank | Position counting ALL items (sponsored + organic) |
-| Organic Rank | Position among non-sponsored products only |
-| Sponsored Rank | Position among sponsored/ad products only |
-| Is Sponsored | Whether the product appeared as a sponsored listing |
-| Page | Which page the product was found on |
-
-### Understanding Rank Types
-
-**Sequential Rank**
-Counts every product on the page in order (1, 2, 3...) regardless of whether it's sponsored or organic. This is exactly what the customer sees when they search.
-
-**Organic Rank**
-Only counts non-sponsored products. If your product is organic and shows as Sequential #5 but there were 2 sponsored products above it, your Organic Rank would be #3. Shows "N/A" for sponsored products.
-
-**Sponsored Rank**
-Only counts sponsored/ad products. If your product is a sponsored ad at Sequential #2, and there was 1 sponsored product before it, your Sponsored Rank would be #2. Shows "N/A" for organic products.
-
-**Is Sponsored**
-Boolean (True/False) indicating if your product appeared as a paid advertisement.
-
-### Example Output
+CSV or Excel files must contain:
 
 ```csv
-Timestamp,Marketplace,Zip Code,Keyword,ASIN,Sequential Rank,Organic Rank,Sponsored Rank,Is Sponsored,Found,Page
-2026-01-30 14:30:00,amazon.com,10001,wireless mouse,B08N5WRWNW,7,5,N/A,False,True,1
-2026-01-30 14:30:00,amazon.com,10001,wireless mouse,B09XYZ1234,3,N/A,2,True,True,1
+Marketplace,Zip Code,ASIN,Keyword
+amazon.com,10001,B08N5WRWNW,wireless mouse
+amazon.co.uk,SW1A 1AA,"B092T8N7T3,B0CQLWJ6X3","velcro cable ties,cable organizer"
 ```
 
-## Webhook Integration
+Column meanings:
 
-When enabled, results are POSTed as JSON to your webhook URL:
+- `Marketplace`: Amazon domain such as `amazon.com`, `amazon.co.uk`, `amazon.de`, `amazon.ca`.
+- `Zip Code`: delivery zip/postal code used before scraping.
+- `ASIN`: one ASIN or multiple ASINs separated by comma, space, tab, or newline.
+- `Keyword`: one keyword or multiple keywords separated by comma or newline.
 
-```json
-{
-  "timestamp": "2026-01-30T14:30:00",
-  "total_results": 2,
-  "results": [
-    {
-      "Timestamp": "2026-01-30 14:30:00",
-      "Marketplace": "amazon.com",
-      "Zip Code": "10001",
-      "Keyword": "wireless mouse",
-      "ASIN": "B08N5WRWNW",
-      "Sequential Rank": 7,
-      "Organic Rank": 5,
-      "Sponsored Rank": "N/A",
-      "Is Sponsored": false,
-      "Found": true,
-      "Page": 1
-    }
-  ]
-}
+### Ranking CLI
+
+Batch mode:
+
+```powershell
+poetry run python main_rank_cli.py --input jobs.csv
 ```
 
-Compatible with n8n, Zapier, Make, or any service that accepts HTTP POST.
+Single task mode:
 
-## Project Structure
-
+```powershell
+poetry run python main_rank_cli.py --marketplace amazon.com --zip-code 10001 --asin B08N5WRWNW --keyword "wireless mouse"
 ```
-amz-geo-rank-scraper/
-├── src/
-│   ├── browser_manager.py    # Playwright browser lifecycle & persistence
-│   ├── location_handler.py   # Zip code injection & verification
-│   ├── scraper.py            # Search & rank extraction (3 rank types)
-│   ├── scraper_controller.py # Job orchestration & scheduling
-│   ├── data_loader.py        # CSV/Excel parsing
-│   ├── notification_manager.py # Sound alerts & notifications
-│   ├── exceptions.py         # Custom exceptions
-│   └── ui/
-│       ├── main_window.py    # PyQt6 main window
-│       └── log_handler.py    # Log display handler
-├── results/                  # Output CSV files (auto-created)
-├── user_data/                # Browser session data/cookies (auto-created)
-├── main_ui.py                # Application entry point
-├── install.bat               # One-click installer
-├── run.bat                   # Quick launcher
-├── pyproject.toml            # Dependencies
-├── settings.json             # User preferences (auto-created, gitignored)
-├── SELECTORS.md              # Amazon CSS selectors reference
-├── LICENSE                   # Proprietary license
-└── README.md                 # This file
+
+Useful options:
+
+```powershell
+--headless
+--webhook-url "https://example.com/webhook"
+--keyword-delay 1
+--task-delay 2
+--stop-on-error
+--user-data-dir user_data
+```
+
+### Ranking output
+
+Ranking results are saved as:
+
+```text
+results/rank_results_YYYYMMDD_HHMMSS.csv
+```
+
+Output columns:
+
+```text
+Timestamp
+Marketplace
+Zip Code
+Keyword
+ASIN
+Sequential Rank
+Organic Rank
+Sponsored Rank
+Is Sponsored
+Found
+Page
+```
+
+Rank types:
+
+- `Sequential Rank`: position counting every visible product result.
+- `Organic Rank`: position among non-sponsored products only.
+- `Sponsored Rank`: position among sponsored products only.
+
+## Detail page scraper
+
+The detail page scraper opens a product detail page after setting marketplace and delivery location. It accepts either an ASIN or a full Amazon product URL.
+
+### Detail page CLI
+
+Single ASIN:
+
+```powershell
+poetry run python main_detail_page.py --marketplace amazon.co.uk --zip-code "SW1A 1AA" --asin B0CQLWJ6X3
+```
+
+Single URL:
+
+```powershell
+poetry run python main_detail_page.py --marketplace amazon.co.uk --zip-code "SW1A 1AA" --url "https://www.amazon.co.uk/dp/B0CQLWJ6X3"
+```
+
+Batch mode:
+
+```powershell
+poetry run python main_detail_page.py --input products.csv
+```
+
+### Detail page input file
+
+CSV or Excel files must contain `Marketplace`, `Zip Code`, and either `ASIN` or `Product URL`.
+
+```csv
+Marketplace,Zip Code,ASIN
+amazon.co.uk,SW1A 1AA,B0CQLWJ6X3
+```
+
+or:
+
+```csv
+Marketplace,Zip Code,Product URL
+amazon.co.uk,SW1A 1AA,https://www.amazon.co.uk/dp/B0CQLWJ6X3
+```
+
+### Detail page output
+
+Detail results are saved as:
+
+```text
+results/detail_page_results_YYYYMMDD_HHMMSS.csv
+```
+
+Output columns include:
+
+```text
+Marketplace
+Zip Code
+ASIN
+Product URL
+Title
+Current Price
+Seller Name
+Brand Name
+Rating
+Number of Reviews
+Primary BSR Rank
+Primary BSR Category
+All BSR Ranks
+Availability
+Delivery
+Delivery Location
+Dispatches From
+Bullet Points
+Attributes
+Description
+A Plus Description
+Product Information
+Reviews Summary
+Rating Breakdown
+Reviews
+Breadcrumbs
+Main Image
+Image URLs
+```
+
+Structured fields are stored as JSON strings inside the CSV:
+
+- `All BSR Ranks`
+- `Bullet Points`
+- `Attributes`
+- `Product Information`
+- `Rating Breakdown`
+- `Reviews`
+- `Breadcrumbs`
+- `Image URLs`
+
+Delivery behavior:
+
+- The `Delivery` column stores only the earliest visible delivery date/promise from the page.
+- Example: if Amazon shows standard delivery on Thursday and fastest delivery tomorrow, the scraper stores `Tomorrow, 9 June`.
+
+## GUI application
+
+The GUI is launched with:
+
+```powershell
+poetry run python main_ui.py
+```
+
+GUI features:
+
+- Load ranking CSV/XLSX files.
+- Start, pause, resume, and stop jobs.
+- View real-time logs.
+- Use headed browser mode for manual captcha solving.
+- Configure scheduling and webhook settings.
+- Save ranking CSV output automatically.
+
+## Browser profile and captcha handling
+
+The browser runs with a persistent profile by default:
+
+```text
+user_data/
+```
+
+This helps preserve cookies, region settings, and Amazon session state. If Amazon shows a captcha, solve it in the visible browser and rerun or resume the job depending on the entry point being used.
+
+Headless mode is available, but headed mode is recommended when testing new marketplaces or when captchas are likely.
+
+## Project structure
+
+```text
+src/browser_manager.py       Playwright persistent browser lifecycle
+src/location_handler.py      Amazon postal-code modal handling and verification
+src/scraper.py               Search ranking scraper logic
+src/detail_scraper.py        Product detail page extraction logic
+src/data_loader.py           CSV/XLSX job loading for ranking jobs
+src/scraper_controller.py    GUI ranking orchestration
+src/ui/                      PyQt6 GUI
+main_ui.py                   GUI entry point
+main_rank_cli.py             Command-line ranking scraper
+main_detail_page.py          Command-line detail page scraper
+main_phase1.py               Legacy integration test script
+results/                     Generated CSV outputs
+user_data/                   Persistent browser profile
 ```
 
 ## Troubleshooting
 
-### Application won't start
+### Browser does not open
 
-**"No running event loop" error**
-This was fixed in version 1.0.0. Make sure you have the latest code.
+Install Chromium:
 
-**"Module not found" error**
-Run `poetry install` to ensure all dependencies are installed.
-
-**Browser doesn't open**
-Run `poetry run playwright install chromium` to install the browser.
-
-### Captcha appears frequently
-
-Amazon may be detecting automation. Try:
-- Waiting longer between runs (use scheduling for daily checks)
-- Running fewer ASINs per job
-- Solving captchas promptly when they appear
-- Using the browser normally for a few minutes before starting jobs
-
-### Location not setting correctly
-
-Amazon A/B tests different UI layouts. If location setting fails:
-1. The app will retry automatically (up to 5 attempts)
-2. You can manually set the location in the browser window
-3. The app will detect your manual change and continue
-
-### Page refreshes cause errors
-
-Amazon sometimes delays page refreshes after location changes. Version 1.0.0 includes improved handling for this. If issues persist:
-1. Let the app retry the task
-2. If it keeps failing, pause and manually verify the location is set
-
-### Results show "N/A" for all ranks
-
-The product was not found on page 1 of search results. The app currently only checks the first page.
-
-### All products showing as Sponsored (incorrect)
-
-If organic products are incorrectly detected as sponsored, Amazon may have changed their HTML. See "Updating Amazon Selectors" below.
-
-## Updating Amazon Selectors
-
-Amazon frequently changes their website HTML structure. When this happens, the scraper may fail to:
-- Set the delivery location
-- Detect sponsored vs organic products
-- Find search results
-
-### How to Update Selectors
-
-**Step 1: Identify the Problem**
-- Check the log for errors like "selector not found" or "timeout"
-- Note which action is failing (location, search, sponsored detection)
-
-**Step 2: Find the New Selector**
-
-1. Open Amazon in Chrome or Edge
-2. Navigate to the page with the element (search results, location modal, etc.)
-3. Press `F12` to open Developer Tools
-4. Click the "Select element" tool (arrow icon) or press `Ctrl+Shift+C`
-5. Click on the element you need to interact with
-6. In the Elements panel, examine the highlighted HTML
-
-**Step 3: Choose a Stable Selector**
-
-Best to worst (in order of stability):
-1. **IDs** - `#nav-global-location-popover-link` (most stable)
-2. **Data attributes** - `[data-component-type="s-search-result"]` (fairly stable)
-3. **Specific classes** - `.puis-sponsored-label-text` (moderately stable)
-4. **Nested selectors** - `div.a-section span.a-text` (least stable)
-
-**Step 4: Test the Selector**
-
-In the browser's Developer Tools Console, type:
-```javascript
-document.querySelector('YOUR_SELECTOR')
+```powershell
+poetry run playwright install chromium
 ```
-If it returns the element, the selector works. If it returns `null`, try a different selector.
 
-**Step 5: Update the Code**
+### Location setting fails
 
-| File | What It Controls |
-|------|------------------|
-| `src/location_handler.py` | Location modal, zip code input, verification |
-| `src/scraper.py` | Search box, search results, sponsored detection |
+Amazon frequently changes its location modal. The shared location handler tries multiple selectors and verifies the final postal code. If it fails repeatedly, manually set the location in the browser profile and rerun.
 
-### Selector Reference
+### Captcha detected
 
-See `SELECTORS.md` for a complete list of all selectors used and their locations.
+Use headed mode, solve the captcha manually in the browser, then rerun the job. Avoid high-frequency repeated scraping.
 
-**Key selectors to check:**
+### Results show `N/A`
 
-| Selector | Purpose | File |
-|----------|---------|------|
-| `#glow-ingress-line2` | Current location display | location_handler.py |
-| `#nav-global-location-popover-link` | Location button | location_handler.py |
-| `#GLUXZipUpdateInput` | Zip code input | location_handler.py |
-| `#twotabsearchtextbox` | Search box | scraper.py |
-| `div[data-component-type="s-search-result"]` | Search results | scraper.py |
-| `.puis-sponsored-label-text` | Sponsored label | scraper.py |
+For ranking jobs, `N/A` means the target ASIN was not found on page 1 for that marketplace, postal code, and keyword.
 
-### Sponsored Detection
+### Detail page fields are blank
 
-The sponsored detection checks for:
-1. **CSS selectors** - `.puis-sponsored-label-text`, `.s-sponsored-label-info-icon`
-2. **Data attributes** - `data-asin-ad-id`, `data-ad-type`
-3. **Text content** - "Sponsored", "Gesponsert" (German), "Sponsorisé" (French)
+Amazon renders different page layouts by category and marketplace. The detail scraper uses multiple fallbacks, but some fields may not exist on every product page. A+ content is captured separately from the older product description block.
 
-If sponsored detection is wrong, inspect a sponsored product's label to find the new CSS class.
+### Price appears in an unexpected currency
 
-## Tech Stack
+Amazon may use account, browser, or region currency preferences from the persistent profile. The scraper records what the page visibly shows.
 
-| Technology | Purpose |
-|------------|---------|
-| Python 3.11+ | Core language |
-| Playwright | Browser automation |
-| PyQt6 | Desktop GUI framework |
-| qasync | Async/Qt event loop integration |
-| APScheduler | Job scheduling |
-| pandas | Data handling & CSV export |
-| httpx | Async HTTP client for webhooks |
-| openpyxl | Excel file support |
+## Responsible use
 
-## Changelog
-
-### Version 1.0.0
-- Initial release
-- Geo-location simulation for US/UK postal codes
-- Three rank types: Sequential, Organic, Sponsored
-- Sponsored product detection
-- PyQt6 desktop interface
-- Captcha detection with sound alerts
-- Daily/Weekly scheduling
-- System tray integration
-- Settings persistence
-- CSV export with timestamps
-- Optional webhook integration
-- Robust page refresh handling
-
-## License
-
-Copyright (c) 2026 Consologist.com - Amazon Services Agency. All rights reserved.
-
-This software is proprietary and confidential. Unauthorized copying, distribution, or use of this software is strictly prohibited.
-
-For licensing inquiries, contact: [consologist.com](https://consologist.com)
-
-## Disclaimer
-
-This tool is for personal use to check your own product rankings. Use responsibly and in accordance with Amazon's Terms of Service. The authors are not responsible for any account restrictions or bans resulting from misuse.
-
----
-
-**Amazon Geo-Rank Scraper** - Developed by [Consologist.com](https://consologist.com)
-
-*Your trusted Amazon Services Agency*
+Use this tool responsibly and in accordance with Amazon's terms and applicable laws. Prefer low-frequency checks, headed mode for manual review, and your own products or authorized research workflows.
