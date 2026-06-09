@@ -404,6 +404,14 @@ class AmazonDetailScraper:
                     return match
             return matches[0]
 
+        standalone_date = re.search(
+            r"\b((?:monday|tuesday|wednesday|thursday|friday|saturday|sunday),?\s+(?:\d{1,2}\s+\w+|\w+\s+\d{1,2}))\b",
+            delivery_text,
+            flags=re.IGNORECASE,
+        )
+        if standalone_date:
+            return self._clean_text(standalone_date.group(1)).rstrip(".")
+
         sentence_match = re.search(
             r"((?:FREE\s+)?delivery\s+[^.]+|(?:Or\s+)?fastest delivery\s+[^.]+|Arrives\s+[^.]+)",
             delivery_text,
@@ -431,8 +439,8 @@ class AmazonDetailScraper:
         now = datetime.now()
 
         relative_patterns = [
-            (r"\b(today)(?:\s+by\s+[^.]+)?", 0),
-            (r"\b(tomorrow)(?:\s+by\s+[^.]+)?", 1),
+            (r"\b(today(?:,\s*)?(?:\d{1,2}\s+\w+|\w+\s+\d{1,2})?)(?:\s+by\s+[^.]+)?", 0),
+            (r"\b(tomorrow(?:,\s*)?(?:\d{1,2}\s+\w+|\w+\s+\d{1,2})?)(?:\s+by\s+[^.]+)?", 1),
         ]
         for pattern, offset in relative_patterns:
             for match in re.finditer(pattern, delivery_text, flags=re.IGNORECASE):
