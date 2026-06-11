@@ -99,8 +99,9 @@ async def run(args):
 
             try:
                 if current_marketplace != marketplace:
-                    await scraper.go_to_home(marketplace)
                     current_marketplace = marketplace
+
+                await scraper.go_to_home(marketplace)
 
                 await scraper.set_delivery_zip(zip_code)
 
