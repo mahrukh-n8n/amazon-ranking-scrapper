@@ -75,12 +75,7 @@ class AmazonDetailScraper:
             asin = self._asin_from_url(product_url)
 
         logger.info(f"Opening product page: {product_url}")
-        await self.page.goto(product_url, wait_until="domcontentloaded")
-
-        try:
-            await self.page.wait_for_load_state("networkidle", timeout=8000)
-        except PlaywrightTimeoutError:
-            pass
+        await self._goto_product_page(product_url, asin)
 
         await self.location_handler.check_for_captcha()
         await self._wait_for_product_shell()
@@ -180,6 +175,75 @@ class AmazonDetailScraper:
                 continue
 
         logger.warning("Product shell selectors were not found; attempting extraction anyway.")
+
+    async def _goto_product_page(self, product_url: str, asin: str = ""):
+        """
+        Navigates to a PDP with retries for Amazon marketplace redirects.
+        Some marketplaces, especially amazon.de, can abort the initial /dp/
+        navigation while redirecting/localizing the request. Treat that as
+        recoverable if the browser still lands on the intended ASIN.
+        """
+        last_error = None
+        urls = [product_url]
+
+        if asin and "/dp/" in product_url and "/-/en/dp/" not in product_url:
+            urls.append(product_url.replace("/dp/", "/-/en/dp/", 1))
+
+        for url in urls:
+            for wait_until in ["domcontentloaded", "commit"]:
+                try:
+                    await self.page.goto(url, wait_until=wait_until, timeout=30000)
+                    await self._settle_after_product_navigation()
+                    return
+                except Exception as exc:
+                    last_error = exc
+                    message = str(exc)
+                    if "net::ERR_ABORTED" not in message:
+                        continue
+
+                    logger.warning(f"Product navigation was aborted by marketplace redirect: {url}")
+                    await asyncio.sleep(1.5)
+                    if await self._looks_like_target_product_page(asin):
+                        await self._settle_after_product_navigation()
+                        return
+
+        if asin:
+            try:
+                await self.page.evaluate("url => { window.location.href = url; }", product_url)
+                await self.page.wait_for_url(f"**/{asin}*", timeout=20000)
+                await self._settle_after_product_navigation()
+                return
+            except Exception as exc:
+                last_error = exc
+
+        if last_error:
+            raise last_error
+
+    async def _settle_after_product_navigation(self):
+        try:
+            await self.page.wait_for_load_state("domcontentloaded", timeout=10000)
+        except PlaywrightTimeoutError:
+            pass
+
+        try:
+            await self.page.wait_for_load_state("networkidle", timeout=8000)
+        except PlaywrightTimeoutError:
+            pass
+
+    async def _looks_like_target_product_page(self, asin: str) -> bool:
+        if not asin:
+            return False
+
+        try:
+            if asin.upper() not in self.page.url.upper():
+                return False
+            for selector in ["#dp", "#centerCol", "#productTitle", "#ppd", "#dp-container"]:
+                if await self.page.query_selector(selector):
+                    return True
+        except Exception:
+            return False
+
+        return False
 
     async def _extract_price(self) -> str:
         price = await self._first_text([
