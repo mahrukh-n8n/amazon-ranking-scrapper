@@ -273,6 +273,19 @@ class AmazonDetailScraper:
             "Best Sellers Rank",
             "Best Seller Rank",
             "Bestsellers Rank",
+            "Classement des meilleures ventes d'Amazon",
+            "Classement des meilleures ventes",
+            "Classement Amazon",
+            "Amazon Best Sellers Rank",
+            "Amazon Bestseller-Rang",
+            "Bestseller-Rang",
+            "Nr. in",
+            "Nº en",
+            "N° en",
+            "Posizione nella classifica Bestseller di Amazon",
+            "Posizione nella classifica Bestseller",
+            "Clasificación en los más vendidos de Amazon",
+            "Clasificación en los más vendidos",
         ])
         if product_info_bsr:
             texts.append(product_info_bsr)
@@ -690,12 +703,11 @@ class AmazonDetailScraper:
             return []
 
         normalized = re.sub(r"\s+", " ", text.replace("\u200e", " ")).strip()
-        normalized = re.sub(r"\(See\s+Top\s+\d+\s+in\s+[^)]*\)", " ", normalized, flags=re.IGNORECASE)
-        if "Best Sellers Rank" in normalized:
-            normalized = normalized.split("Best Sellers Rank", 1)[1]
+        normalized = self._strip_bsr_top_links(normalized)
+        normalized = self._strip_bsr_label_prefix(normalized)
 
         pattern = re.compile(
-            r"#?\s*([0-9][0-9,.\s]*)\s+in\s+([^#(]+?)(?=(?:\s*#?\s*[0-9][0-9,.\s]*\s+in\s+)|(?:\s*\()|$)",
+            r"(?:#|n[°º]?|nr\.?|no\.?)?\s*([0-9][0-9,.\s]*)\s+(?:in|en|dans|unter|bei|nella|nel|em)\s+([^#(]+?)(?=(?:\s*(?:#|n[°º]?|nr\.?|no\.?)?\s*[0-9][0-9,.\s]*\s+(?:in|en|dans|unter|bei|nella|nel|em)\s+)|(?:\s*\()|$)",
             re.IGNORECASE,
         )
 
@@ -706,6 +718,47 @@ class AmazonDetailScraper:
             ranks.append({"rank": rank, "category": category})
 
         return ranks
+
+    def _strip_bsr_top_links(self, text: str) -> str:
+        patterns = [
+            r"\(See\s+Top\s+\d+\s+in\s+[^)]*\)",
+            r"\(Voir\s+les\s+\d+\s+premiers\s+en\s+[^)]*\)",
+            r"\(Voir\s+le\s+top\s+\d+\s+[^)]*\)",
+            r"\(Siehe\s+Top\s+\d+\s+in\s+[^)]*\)",
+            r"\(Ver\s+el\s+Top\s+\d+\s+en\s+[^)]*\)",
+            r"\(Vedi\s+la\s+Top\s+\d+\s+[^)]*\)",
+        ]
+        for pattern in patterns:
+            text = re.sub(pattern, " ", text, flags=re.IGNORECASE)
+        return text
+
+    def _strip_bsr_label_prefix(self, text: str) -> str:
+        labels = [
+            "Best Sellers Rank",
+            "Best Seller Rank",
+            "Bestsellers Rank",
+            "Amazon Best Sellers Rank",
+            "Classement des meilleures ventes d'Amazon",
+            "Classement des meilleures ventes",
+            "Classement Amazon",
+            "Amazon Bestseller-Rang",
+            "Bestseller-Rang",
+            "Posizione nella classifica Bestseller di Amazon",
+            "Posizione nella classifica Bestseller",
+            "Clasificación en los más vendidos de Amazon",
+            "Clasificación en los más vendidos",
+        ]
+        text_lower = text.lower()
+        split_index = -1
+        split_label = ""
+        for label in labels:
+            index = text_lower.find(label.lower())
+            if index >= 0 and (split_index < 0 or index < split_index):
+                split_index = index
+                split_label = label
+        if split_index >= 0:
+            return text[split_index + len(split_label):]
+        return text
 
     async def _product_information_value(self, labels: List[str]) -> str:
         try:
